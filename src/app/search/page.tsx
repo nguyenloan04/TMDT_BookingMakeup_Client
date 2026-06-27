@@ -414,7 +414,7 @@ export default function SearchPage() {
                   gridTemplateColumns: "repeat(3, 1fr)",
                   gap: 20,
                 }}>
-                  {result.services.map(s => <ServiceCard key={s.id} service={s} />)}
+                  {result.services.map(s => <ServiceCard key={s.serviceUuid} service={s} />)}
                 </div>
 
                 {/* pagination */}

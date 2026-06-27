@@ -16,6 +16,8 @@ import {
   XCircle,
   Users,
   TrendingUp,
+  Star,
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,11 +34,18 @@ import {
   createPromotion,
   updatePromotion,
   deletePromotion,
+  getAllFavouritesAdmin,
+  deleteFavouriteAdmin,
+  FavouriteAdminDto,
+  getAllReviews,
+  updateReviewStatus,
+  deleteReview,
 } from "@/lib/api";
 
 import { UserDto } from "@/types/user";
 import { BookingDto, BookingStatus } from "@/types/booking";
 import { PromotionDto } from "@/types/promotion";
+import { ReviewDto } from "@/types/review";
 
 type AdminTab =
   | "stats"
@@ -68,6 +77,15 @@ export default function AdminDashboard() {
     null,
   );
 
+  const [loadingFavorites, setLoadingFavorites] = useState(false);
+  const [favorites, setFavorites] = useState<FavouriteAdminDto[]>([]);
+  const [favoriteSearchQuery, setFavoriteSearchQuery] = useState("");
+
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  const [reviews, setReviews] = useState<ReviewDto[]>([]);
+  const [reviewSearchQuery, setReviewSearchQuery] = useState("");
+  const [reviewStatusFilter, setReviewStatusFilter] = useState<"ALL" | "APPROVED" | "PENDING" | "REJECTED">("ALL");
+
   const [promoModalOpen, setPromoModalOpen] = useState(false);
   const [editingPromo, setEditingPromo] = useState<PromotionDto | null>(null);
   const [promoCode, setPromoCode] = useState("");
@@ -81,7 +99,21 @@ export default function AdminDashboard() {
     fetchUsers();
     fetchBookings();
     fetchPromotionsList();
+    fetchFavorites();
+    fetchReviewsList();
   }, []);
+
+  const getErrorMessage = (e: any, fallback: string): string => {
+    if (e.response?.data) {
+      if (typeof e.response.data === "string") {
+        return e.response.data;
+      }
+      if (typeof e.response.data === "object") {
+        return e.response.data.message || e.response.data.error || fallback;
+      }
+    }
+    return e.message || fallback;
+  };
 
   const fetchUsers = async () => {
     setLoadingUsers(true);
@@ -116,6 +148,65 @@ export default function AdminDashboard() {
       toast.error("Không thể tải danh sách khuyến mãi");
     } finally {
       setLoadingPromotions(false);
+    }
+  };
+
+  const fetchFavorites = async () => {
+    setLoadingFavorites(true);
+    try {
+      const list = await getAllFavouritesAdmin();
+      setFavorites(list || []);
+    } catch {
+      toast.error("Không thể tải danh sách dịch vụ yêu thích");
+    } finally {
+      setLoadingFavorites(false);
+    }
+  };
+
+  const handleDeleteFavorite = async (id: number) => {
+    if (!confirm("Bạn có chắc chắn muốn xóa liên kết yêu thích này?")) return;
+    try {
+      await deleteFavouriteAdmin(id);
+      toast.success("Xóa liên kết yêu thích thành công!");
+      fetchFavorites();
+    } catch (e: any) {
+      toast.error(getErrorMessage(e, "Không thể xóa liên kết yêu thích"));
+    }
+  };
+
+  const fetchReviewsList = async () => {
+    setLoadingReviews(true);
+    try {
+      const list = await getAllReviews();
+      setReviews(list || []);
+    } catch {
+      toast.error("Không thể tải danh sách đánh giá");
+    } finally {
+      setLoadingReviews(false);
+    }
+  };
+
+  const handleUpdateReviewStatus = async (
+    id: string,
+    status: "APPROVED" | "PENDING" | "REJECTED",
+  ) => {
+    try {
+      await updateReviewStatus(id, status);
+      toast.success("Cập nhật trạng thái đánh giá thành công!");
+      fetchReviewsList();
+    } catch (e: any) {
+      toast.error(getErrorMessage(e, "Không thể cập nhật trạng thái"));
+    }
+  };
+
+  const handleDeleteReview = async (id: string) => {
+    if (!confirm("Bạn có chắc chắn muốn xóa đánh giá này không?")) return;
+    try {
+      await deleteReview(id);
+      toast.success("Xóa đánh giá thành công!");
+      fetchReviewsList();
+    } catch (e: any) {
+      toast.error(getErrorMessage(e, "Không thể xóa đánh giá"));
     }
   };
 
@@ -175,7 +266,7 @@ export default function AdminDashboard() {
       setPromoModalOpen(false);
       fetchPromotionsList();
     } catch (e: any) {
-      toast.error(e.response?.data || "Thao tác thất bại");
+      toast.error(getErrorMessage(e, "Thao tác thất bại"));
     } finally {
       setSavingPromo(false);
     }
@@ -188,7 +279,7 @@ export default function AdminDashboard() {
       toast.success("Xóa mã giảm giá thành công!");
       fetchPromotionsList();
     } catch (e: any) {
-      toast.error(e.response?.data || "Không thể xóa khuyến mãi");
+      toast.error(getErrorMessage(e, "Không thể xóa khuyến mãi"));
     }
   };
 
@@ -203,7 +294,7 @@ export default function AdminDashboard() {
       );
       fetchUsers();
     } catch (e: any) {
-      toast.error(e.response?.data || "Thao tác thất bại");
+      toast.error(getErrorMessage(e, "Thao tác thất bại"));
     } finally {
       setUpdatingUserId(null);
     }
@@ -221,7 +312,7 @@ export default function AdminDashboard() {
       toast.success(`Đã thay đổi vai trò tài khoản thành: ${newRole}`);
       fetchUsers();
     } catch (e: any) {
-      toast.error(e.response?.data || "Thao tác thất bại");
+      toast.error(getErrorMessage(e, "Thao tác thất bại"));
     } finally {
       setUpdatingUserId(null);
     }
@@ -237,7 +328,7 @@ export default function AdminDashboard() {
       toast.success(`Cập nhật trạng thái đơn hàng thành: ${status}`);
       fetchBookings();
     } catch (e: any) {
-      toast.error(e.response?.data || "Không thể cập nhật trạng thái");
+      toast.error(getErrorMessage(e, "Không thể cập nhật trạng thái"));
     } finally {
       setUpdatingBookingId(null);
     }
@@ -248,6 +339,32 @@ export default function AdminDashboard() {
       style: "currency",
       currency: "VND",
     }).format(p);
+
+  const filteredFavorites = useMemo(() => {
+    return favorites.filter(fav => {
+      const query = favoriteSearchQuery.toLowerCase();
+      return (
+        (fav.customerName || "").toLowerCase().includes(query) ||
+        (fav.customerEmail || "").toLowerCase().includes(query) ||
+        (fav.serviceName || "").toLowerCase().includes(query) ||
+        (fav.artistName || "").toLowerCase().includes(query)
+      );
+    });
+  }, [favorites, favoriteSearchQuery]);
+
+  const filteredReviews = useMemo(() => {
+    return reviews.filter(rev => {
+      const matchesSearch = 
+        (rev.customer || "").toLowerCase().includes(reviewSearchQuery.toLowerCase()) ||
+        (rev.service || "").toLowerCase().includes(reviewSearchQuery.toLowerCase()) ||
+        (rev.comment || "").toLowerCase().includes(reviewSearchQuery.toLowerCase());
+        
+      const matchesStatus = 
+        reviewStatusFilter === "ALL" || rev.status === reviewStatusFilter;
+        
+      return matchesSearch && matchesStatus;
+    });
+  }, [reviews, reviewSearchQuery, reviewStatusFilter]);
 
   const bookingStatusLabel = (status: BookingStatus) => {
     switch (status) {
@@ -594,8 +711,310 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* TAB: FAVORITE SERVICES (placeholder) */}
-      {activeTab === "favorites" && null}
+      {/* TAB: FAVORITE SERVICES MANAGEMENT */}
+      {activeTab === "favorites" && (
+        <div className="space-y-4">
+          {loadingFavorites ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-[#E4187D] mb-2" />
+              <p className="text-gray-400 text-sm">
+                Đang tải danh sách dịch vụ yêu thích...
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <h3 className="font-bold text-gray-900">
+                    Quản lý dịch vụ yêu thích ({favorites.length})
+                  </h3>
+                  <p className="text-gray-500 text-xs mt-0.5">
+                    Theo dõi và xóa các liên kết dịch vụ yêu thích của người dùng trên hệ thống.
+                  </p>
+                </div>
+                {/* Search Box */}
+                <div className="relative w-full sm:w-72">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </span>
+                  <Input
+                    placeholder="Tìm khách hàng, email, dịch vụ..."
+                    className="pl-9 rounded-full text-xs"
+                    value={favoriteSearchQuery}
+                    onChange={(e) => setFavoriteSearchQuery(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {filteredFavorites.length === 0 ? (
+                <div className="text-center py-20 bg-white rounded-2xl border border-gray-100 p-8 max-w-md mx-auto">
+                  <svg className="w-12 h-12 text-gray-200 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                  </svg>
+                  <h3 className="font-bold text-gray-800 text-lg mb-1">
+                    Không tìm thấy kết quả nào
+                  </h3>
+                  <p className="text-gray-500 text-sm">
+                    {favorites.length === 0 
+                      ? "Chưa có người dùng nào thêm dịch vụ vào danh sách yêu thích." 
+                      : "Không có liên kết yêu thích nào khớp với từ khóa tìm kiếm."}
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead className="bg-gray-50 text-gray-700 uppercase text-[11px] font-bold tracking-wider">
+                      <tr>
+                        <th className="p-4 border-b border-gray-100">Khách Hàng</th>
+                        <th className="p-4 border-b border-gray-100">Dịch Vụ Yêu Thích</th>
+                        <th className="p-4 border-b border-gray-100">Nghệ Sĩ / Studio</th>
+                        <th className="p-4 border-b border-gray-100 text-right">Hành Động</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-gray-700 font-medium">
+                      {filteredFavorites.map((fav) => (
+                        <tr
+                          key={fav.id}
+                          className="hover:bg-gray-50/50 transition-colors"
+                        >
+                          <td className="p-4">
+                            <div className="font-bold text-gray-900">
+                              {fav.customerName}
+                            </div>
+                            <div className="text-[11px] text-gray-400 font-normal mt-0.5">
+                              {fav.customerEmail}
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <div className="font-bold text-[#E4187D]">
+                              {fav.serviceName}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-0.5">
+                              Giá: {formatPrice(fav.servicePrice)}
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <span className="bg-pink-50 text-pink-700 px-2.5 py-1 rounded-full text-xs font-semibold">
+                              {fav.artistName}
+                            </span>
+                          </td>
+                          <td className="p-4 text-right">
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDeleteFavorite(fav.id)}
+                              className="text-xs rounded-full cursor-pointer flex items-center gap-1 ml-auto"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> Xóa
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* TAB: REVIEWS MANAGEMENT */}
+      {activeTab === "reviews" && (
+        <div className="space-y-4">
+          {loadingReviews ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-[#E4187D] mb-2" />
+              <p className="text-gray-400 text-sm">
+                Đang tải danh sách đánh giá...
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                  <h3 className="font-bold text-gray-900">
+                    Quản lý đánh giá hệ thống ({reviews.length})
+                  </h3>
+                  <p className="text-gray-500 text-xs mt-0.5">
+                    Kiểm duyệt, phê duyệt, ẩn hoặc xóa nhận xét từ khách hàng.
+                  </p>
+                </div>
+                
+                {/* Search & Status Pills in header */}
+                <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto flex-1 justify-end">
+                  <div className="relative w-full sm:w-64 shrink-0">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    </span>
+                    <Input
+                      placeholder="Tìm khách hàng, dịch vụ, nội dung..."
+                      className="pl-9 rounded-full text-xs"
+                      value={reviewSearchQuery}
+                      onChange={(e) => setReviewSearchQuery(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-2 px-2 sm:mx-0 sm:px-0 scrollbar-none">
+                    {[
+                      { value: "ALL", label: "Tất cả" },
+                      { value: "PENDING", label: "Chờ duyệt" },
+                      { value: "APPROVED", label: "Đã duyệt" },
+                      { value: "REJECTED", label: "Đã ẩn" },
+                    ].map((pill) => {
+                      const isActive = reviewStatusFilter === pill.value;
+                      const count = pill.value === "ALL" 
+                        ? reviews.length 
+                        : reviews.filter((r) => r.status === pill.value).length;
+                      return (
+                        <button
+                          key={pill.value}
+                          onClick={() => setReviewStatusFilter(pill.value as any)}
+                          className={`rounded-full text-xs px-3.5 py-1.5 font-semibold transition-all shrink-0 cursor-pointer ${
+                            isActive 
+                              ? "bg-[#E4187D] text-white shadow-xs" 
+                              : "border border-gray-200 text-gray-500 hover:bg-gray-50"
+                          }`}
+                        >
+                          {pill.label} ({count})
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {filteredReviews.length === 0 ? (
+                <div className="text-center py-20 bg-white rounded-2xl border border-gray-100 p-8 max-w-md mx-auto space-y-4">
+                  <div className="p-4 bg-gray-50 rounded-full w-fit mx-auto">
+                    <MessageSquare className="w-10 h-10 text-gray-200" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="font-bold text-gray-800 text-lg">
+                      Không tìm thấy đánh giá nào
+                    </h3>
+                    <p className="text-gray-500 text-sm max-w-xs mx-auto">
+                      {reviews.length === 0 
+                        ? "Hệ thống chưa nhận được bất kỳ đánh giá nào từ người dùng." 
+                        : "Không có đánh giá nào khớp với tiêu chí bộ lọc hiện tại."}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredReviews.map((rev) => (
+                    <div
+                      key={rev.id}
+                      className="bg-white border border-gray-100 rounded-2xl p-5 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow space-y-4"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="font-bold text-gray-900 text-sm block">
+                              {rev.customer}
+                            </span>
+                            <span className="text-[10px] text-gray-400 block mt-0.5">
+                              📅 {rev.date}
+                            </span>
+                          </div>
+                          <Badge
+                            className={
+                              rev.status === "APPROVED"
+                                ? "bg-green-50 text-green-700 hover:bg-green-50 border-green-200 border text-xs"
+                                : rev.status === "REJECTED"
+                                  ? "bg-red-50 text-red-700 hover:bg-red-50 border-red-200 border text-xs"
+                                  : "bg-yellow-50 text-yellow-750 hover:bg-yellow-50 border-yellow-250 border text-xs"
+                            }
+                          >
+                            {rev.status === "APPROVED"
+                              ? "Đã Duyệt"
+                              : rev.status === "REJECTED"
+                                ? "Đã Ẩn"
+                                : "Chờ Duyệt"}
+                          </Badge>
+                        </div>
+
+                        <div>
+                          <span className="text-xs text-gray-400 font-bold uppercase tracking-wider block">
+                            Dịch vụ đánh giá
+                          </span>
+                          <span className="font-bold text-[#E4187D] text-sm block mt-0.5">
+                            {rev.service}
+                          </span>
+                        </div>
+
+                        {/* Rating Stars */}
+                        <div className="flex items-center gap-1.5">
+                          <div className="flex gap-0.5">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <Star
+                                key={star}
+                                className={`w-3.5 h-3.5 ${
+                                  star <= rev.rating
+                                    ? "text-yellow-400 fill-yellow-400"
+                                    : "text-gray-200"
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <span className="text-xs text-gray-450 font-bold font-mono">
+                            {rev.rating.toFixed(1)} / 5
+                          </span>
+                        </div>
+
+                        {/* Comment box */}
+                        <p className="text-xs text-gray-600 italic bg-gray-50/50 p-3 rounded-xl border border-gray-100/50 leading-relaxed font-normal">
+                          &quot;{rev.comment}&quot;
+                        </p>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex justify-between items-center pt-3 border-t border-gray-50">
+                        <div className="flex gap-1.5">
+                          {rev.status !== "APPROVED" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleUpdateReviewStatus(rev.id, "APPROVED")}
+                              className="text-xs rounded-full border-green-200 text-green-600 hover:bg-green-50 px-3 cursor-pointer"
+                            >
+                              Phê Duyệt
+                            </Button>
+                          )}
+                          {rev.status !== "REJECTED" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleUpdateReviewStatus(rev.id, "REJECTED")}
+                              className="text-xs rounded-full border-red-200 text-red-600 hover:bg-red-50 px-3 cursor-pointer"
+                            >
+                              Ẩn Đi
+                            </Button>
+                          )}
+                        </div>
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteReview(rev.id)}
+                          className="text-xs text-gray-450 hover:text-red-500 hover:bg-red-50 rounded-full p-2 cursor-pointer"
+                          title="Xóa vĩnh viễn"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {/* TAB: REVIEWS (placeholder) */}
       {activeTab === "reviews" && null}

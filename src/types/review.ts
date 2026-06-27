@@ -7,7 +7,7 @@ export interface ReviewDto {
     rating: number;
     comment: string;
     date: string;
-    status: "APPROVED" | "PENDING" | "HIDDEN";
+    status: "APPROVED" | "PENDING" | "REJECTED";
 }
 
 export interface CreateReviewRequest {

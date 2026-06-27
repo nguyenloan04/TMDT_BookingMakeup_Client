@@ -174,7 +174,7 @@ export default function CustomerDashboard() {
     try {
       await createBooking({
         serviceId: selectedService.id,
-        artistId: selectedService.ownerId, // artistId matches SO ownerId
+        ownerId: selectedService.ownerId,
         bookingDate,
         startTime: bookingTime.includes(":") ? (bookingTime.split(":").length === 2 ? `${bookingTime}:00` : bookingTime) : `${bookingTime}:00:00`,
         promoCode: couponCode.trim() || undefined

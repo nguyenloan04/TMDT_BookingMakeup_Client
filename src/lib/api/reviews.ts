@@ -26,7 +26,7 @@ export async function getAllReviews(): Promise<ReviewDto[]> {
 }
 
 // Cập nhật trạng thái đánh giá (Admin)
-export async function updateReviewStatus(id: string, status: "APPROVED" | "PENDING" | "HIDDEN"): Promise<ReviewDto> {
+export async function updateReviewStatus(id: string, status: "APPROVED" | "PENDING" | "REJECTED"): Promise<ReviewDto> {
   const { data } = await apiClient.patch<ReviewDto>(`/reviews/${id}/status`, { status });
   return data;
 }

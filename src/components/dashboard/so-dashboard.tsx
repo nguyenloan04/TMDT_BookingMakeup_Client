@@ -17,6 +17,15 @@ import {
   FileImage,
   Star,
   MessageSquare,
+  Clock,
+  TrendingUp,
+  AlertCircle,
+  Filter,
+  Search,
+  Copy,
+  FileText,
+  ChevronRight,
+  Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,6 +93,12 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
   const [updatingBookingId, setUpdatingBookingId] = useState<string | null>(
     null,
   );
+
+  // Booking Filter & Details States
+  const [bookingSearchQuery, setBookingSearchQuery] = useState("");
+  const [bookingStatusFilter, setBookingStatusFilter] = useState<"ALL" | BookingStatus>("ALL");
+  const [bookingDateFilter, setBookingDateFilter] = useState("");
+  const [selectedDetailBooking, setSelectedDetailBooking] = useState<BookingDto | null>(null);
 
   // Promotions State
   const [promotions, setPromotions] = useState<PromotionDto[]>([]);
@@ -351,6 +366,36 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
     }).format(p);
   };
 
+  // Filter Bookings logic
+  const filteredBookings = bookings.filter((b) => {
+    const matchesSearch =
+      b.serviceName.toLowerCase().includes(bookingSearchQuery.toLowerCase()) ||
+      (b.customerDisplayName || "").toLowerCase().includes(bookingSearchQuery.toLowerCase());
+    
+    const matchesStatus =
+      bookingStatusFilter === "ALL" || b.status === bookingStatusFilter;
+      
+    const matchesDate =
+      !bookingDateFilter || b.bookingDate === bookingDateFilter;
+      
+    return matchesSearch && matchesStatus && matchesDate;
+  });
+
+  // Calculate statistics
+  const totalBookingsCount = bookings.length;
+  const pendingBookingsCount = bookings.filter((b) => b.status === "PENDING").length;
+  const completedBookingsCount = bookings.filter((b) => b.status === "COMPLETED").length;
+  
+  // Revenue: Sum of totalAmount for CONFIRMED or COMPLETED bookings
+  const estimatedRevenue = bookings
+    .filter((b) => b.status === "CONFIRMED" || b.status === "COMPLETED")
+    .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+
+  // Deposits collected: Sum of depositAmount for CONFIRMED or COMPLETED bookings
+  const collectedDeposits = bookings
+    .filter((b) => b.status === "CONFIRMED" || b.status === "COMPLETED")
+    .reduce((sum, b) => sum + (b.depositAmount || 0), 0);
+
   return (
     <div className="space-y-6">
       {/* Sub Tabs */}
@@ -515,51 +560,187 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
 
       {/* TAB 2: MANAGE BOOKINGS */}
       {activeTab === "bookings" && (
-        <div className="space-y-4">
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-50">
-            <h3 className="font-bold text-gray-900">
-              Danh sách các yêu cầu đặt lịch hẹn của bạn
-            </h3>
-            <p className="text-gray-500 text-xs mt-0.5">
-              Xác nhận, hoàn tất hoặc hủy bỏ lịch hẹn từ khách hàng.
-            </p>
+        <div className="space-y-5">
+          {/* Statistics Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Card 1: Total Bookings */}
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow">
+              <div className="p-3.5 rounded-xl bg-pink-50 text-[#E4187D] shrink-0">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">Tổng Lịch Hẹn</span>
+                <span className="text-2xl font-black text-gray-800">{totalBookingsCount}</span>
+              </div>
+            </div>
+
+            {/* Card 2: Pending Confirmations */}
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow">
+              <div className="p-3.5 rounded-xl bg-yellow-50 text-yellow-600 shrink-0">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">Chờ Xác Nhận</span>
+                <span className="text-2xl font-black text-gray-800">{pendingBookingsCount}</span>
+              </div>
+            </div>
+
+            {/* Card 3: Completed */}
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow">
+              <div className="p-3.5 rounded-xl bg-green-50 text-green-600 shrink-0">
+                <CheckCircle className="w-5 h-5" />
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">Đã Hoàn Thành</span>
+                <span className="text-2xl font-black text-gray-800">{completedBookingsCount}</span>
+              </div>
+            </div>
+
+            {/* Card 4: Estimated Revenue */}
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow">
+              <div className="p-3.5 rounded-xl bg-pink-50 text-[#E4187D] shrink-0">
+                <TrendingUp className="w-5 h-5" />
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">Ước Tính Doanh Thu</span>
+                <span className="text-xl font-black text-[#E4187D]">{formatPrice(estimatedRevenue)}</span>
+                <span className="text-[10px] text-gray-400 block font-medium">Đã cọc: {formatPrice(collectedDeposits)}</span>
+              </div>
+            </div>
           </div>
 
-          {bookings.length === 0 ? (
-            <div className="text-center py-20 bg-white rounded-2xl border border-gray-100 p-8 max-w-md mx-auto">
-              <Calendar className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-              <h3 className="font-bold text-gray-800 text-lg mb-1">
-                Chưa có lịch hẹn nào
-              </h3>
-              <p className="text-gray-500 text-sm">
-                Các yêu cầu đặt lịch từ khách hàng cho dịch vụ của bạn sẽ hiển
-                thị tại đây.
-              </p>
+          {/* Filters & Search Controls */}
+          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-50 space-y-4">
+            <div className="flex flex-col md:flex-row gap-3">
+              {/* Search Box */}
+              <div className="relative flex-1">
+                <Search className="absolute left-3.5 top-3 w-4 h-4 text-gray-400" />
+                <Input
+                  placeholder="Tìm tên khách hàng hoặc tên dịch vụ..."
+                  className="pl-10 rounded-full border-gray-200 focus:border-pink-300 focus:ring-pink-100"
+                  value={bookingSearchQuery}
+                  onChange={(e) => setBookingSearchQuery(e.target.value)}
+                />
+              </div>
+              {/* Date Filter */}
+              <div className="flex gap-2 items-center">
+                <div className="relative">
+                  <Input
+                    type="date"
+                    className="rounded-full border-gray-200 focus:border-pink-300 focus:ring-pink-100 text-xs w-[160px] pl-3 pr-2 py-1.5"
+                    value={bookingDateFilter}
+                    onChange={(e) => setBookingDateFilter(e.target.value)}
+                  />
+                </div>
+                {bookingDateFilter && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-gray-500 hover:text-red-500 rounded-full shrink-0"
+                    onClick={() => setBookingDateFilter("")}
+                  >
+                    Xóa ngày
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Status Pills */}
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-2 px-2 scrollbar-none">
+              {[
+                { value: "ALL", label: "Tất cả" },
+                { value: "PENDING", label: "Chờ xác nhận" },
+                { value: "CONFIRMED", label: "Đã xác nhận" },
+                { value: "COMPLETED", label: "Đã hoàn thành" },
+                { value: "CANCELLED", label: "Đã hủy" },
+              ].map((pill) => {
+                const isActive = bookingStatusFilter === pill.value;
+                const count = pill.value === "ALL" 
+                  ? bookings.length 
+                  : bookings.filter((b) => b.status === pill.value).length;
+                return (
+                  <Button
+                    key={pill.value}
+                    variant={isActive ? "default" : "outline"}
+                    className={`rounded-full text-xs px-4 py-1.5 shrink-0 transition-all font-semibold cursor-pointer ${
+                      isActive 
+                        ? "bg-[#E4187D] hover:bg-[#c9126b] text-white shadow-sm" 
+                        : "border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+                    }`}
+                    onClick={() => setBookingStatusFilter(pill.value as "ALL" | BookingStatus)}
+                  >
+                    {pill.label} ({count})
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+
+          {filteredBookings.length === 0 ? (
+            <div className="text-center py-20 bg-white rounded-2xl border border-gray-100 p-8 max-w-md mx-auto space-y-4">
+              <div className="p-4 bg-gray-50 rounded-full w-fit mx-auto">
+                <AlertCircle className="w-10 h-10 text-gray-350" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-bold text-gray-800 text-lg">
+                  Không tìm thấy lịch hẹn
+                </h3>
+                <p className="text-gray-500 text-sm max-w-xs mx-auto">
+                  {bookings.length === 0 
+                    ? "Các yêu cầu đặt lịch từ khách hàng cho dịch vụ của bạn sẽ hiển thị tại đây."
+                    : "Không có lịch hẹn nào khớp với tiêu chí tìm kiếm hoặc bộ lọc hiện tại."}
+                </p>
+              </div>
+              {bookings.length > 0 && (
+                <Button
+                  onClick={() => {
+                    setBookingSearchQuery("");
+                    setBookingStatusFilter("ALL");
+                    setBookingDateFilter("");
+                  }}
+                  variant="outline"
+                  className="rounded-full text-xs font-semibold px-5 border-gray-200 text-gray-600 hover:bg-gray-50"
+                >
+                  Xóa tất cả bộ lọc
+                </Button>
+              )}
             </div>
           ) : (
-            <div className="space-y-4">
-              {bookings.map((booking) => (
+            <div className="grid grid-cols-1 gap-4">
+              {filteredBookings.map((booking) => (
                 <div
                   key={booking.id}
-                  className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
+                  className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 relative overflow-hidden group"
                 >
-                  <div className="space-y-2">
+                  {/* Left line decorator based on status */}
+                  <div className={`absolute left-0 top-0 bottom-0 w-1.5 transition-colors ${
+                    booking.status === "CONFIRMED"
+                      ? "bg-green-500"
+                      : booking.status === "COMPLETED"
+                        ? "bg-blue-500"
+                        : booking.status === "CANCELLED"
+                          ? "bg-gray-300"
+                          : "bg-yellow-500"
+                  }`} />
+                  
+                  <div className="space-y-2.5 pl-2 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-gray-900 text-lg">
+                      <span className="font-bold text-gray-900 text-lg tracking-tight group-hover:text-[#E4187D] transition-colors">
                         {booking.serviceName}
                       </span>
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-gray-400">|</span>
+                      <span className="text-xs text-gray-500 font-semibold bg-gray-50 px-2 py-0.5 rounded-md">
                         Khách: {booking.customerDisplayName || "Chưa cập nhật"}
                       </span>
                       <Badge
                         className={
                           booking.status === "CONFIRMED"
-                            ? "bg-green-100 text-green-700 hover:bg-green-100 border-none"
+                            ? "bg-green-50 text-green-700 hover:bg-green-50 border-green-200 border"
                             : booking.status === "COMPLETED"
-                              ? "bg-blue-100 text-blue-700 hover:bg-blue-100 border-none"
+                              ? "bg-blue-50 text-blue-700 hover:bg-blue-50 border-blue-200 border"
                               : booking.status === "CANCELLED"
-                                ? "bg-red-100 text-red-700 hover:bg-red-100 border-none"
-                                : "bg-yellow-100 text-yellow-700 hover:bg-yellow-100 border-none"
+                                ? "bg-gray-50 text-gray-500 hover:bg-gray-50 border-gray-200 border"
+                                : "bg-yellow-50 text-yellow-750 hover:bg-yellow-50 border-yellow-250 border"
                         }
                       >
                         {booking.status === "PENDING"
@@ -571,97 +752,122 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
                               : "Đã Hủy"}
                       </Badge>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-500">
-                      <p>
-                        ⏱ Khung giờ: {booking.startTime.slice(0, 5)} -{" "}
-                        {booking.endTime.slice(0, 5)}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1.5 text-xs text-gray-500 font-medium font-mono">
+                      <p className="flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-gray-400" />
+                        <span>Giờ: {booking.startTime.slice(0, 5)} - {booking.endTime.slice(0, 5)}</span>
                       </p>
-                      <p>
-                        📅 Ngày hẹn:{" "}
-                        {booking.bookingDate.split("-").reverse().join("/")}
+                      <p className="flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                        <span>Ngày: {booking.bookingDate.split("-").reverse().join("/")}</span>
                       </p>
+                      {booking.artistName && (
+                        <p className="flex items-center gap-1.5">
+                          <User className="w-3.5 h-3.5 text-gray-400" />
+                          <span>Thợ: {booking.artistName}</span>
+                        </p>
+                      )}
                     </div>
-                    <div className="flex gap-4 text-xs text-gray-400">
-                      <p>
-                        Tổng tiền:{" "}
-                        <span className="font-semibold text-gray-700">
+
+                    <div className="flex flex-wrap gap-4 text-xs pt-1.5 border-t border-gray-50/50">
+                      <p className="text-gray-400 font-mono">
+                        Tổng cộng:{" "}
+                        <span className="font-extrabold text-gray-700">
                           {formatPrice(booking.totalAmount)}
                         </span>
                       </p>
-                      <p>
-                        Khách đã cọc:{" "}
-                        <span className="font-semibold text-pink-600">
+                      <p className="text-gray-400 font-mono">
+                        Khách cọc (55%):{" "}
+                        <span className="font-extrabold text-pink-600">
                           {formatPrice(booking.depositAmount)}
+                        </span>
+                      </p>
+                      <p className="text-gray-400 font-mono">
+                        Còn lại (45%):{" "}
+                        <span className="font-bold text-gray-500">
+                          {formatPrice(booking.totalAmount - booking.depositAmount)}
                         </span>
                       </p>
                     </div>
                   </div>
 
-                  {/* Booking Actions */}
-                  <div className="flex gap-2 w-full md:w-auto self-end md:self-center shrink-0">
-                    {updatingBookingId === booking.id ? (
-                      <div className="flex items-center gap-1.5 text-gray-400 text-xs font-semibold py-2">
-                        <Loader2 className="w-4 h-4 animate-spin text-[#E4187D]" />
-                        Đang lưu...
-                      </div>
-                    ) : (
-                      <>
-                        {booking.status === "PENDING" && (
-                          <>
-                            <Button
-                              onClick={() =>
-                                handleUpdateBookingStatus(
-                                  booking.id,
-                                  "CONFIRMED",
-                                )
-                              }
-                              className="bg-green-600 hover:bg-green-700 text-white rounded-full text-xs font-bold px-4 py-2 cursor-pointer flex items-center gap-1"
-                            >
-                              <Check className="w-3.5 h-3.5" /> Chấp Nhận
-                            </Button>
-                            <Button
-                              onClick={() =>
-                                handleUpdateBookingStatus(
-                                  booking.id,
-                                  "CANCELLED",
-                                )
-                              }
-                              variant="outline"
-                              className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 rounded-full text-xs font-bold px-4 py-2 cursor-pointer flex items-center gap-1"
-                            >
-                              <X className="w-3.5 h-3.5" /> Từ Chối
-                            </Button>
-                          </>
-                        )}
-                        {booking.status === "CONFIRMED" && (
-                          <>
-                            <Button
-                              onClick={() =>
-                                handleUpdateBookingStatus(
-                                  booking.id,
-                                  "COMPLETED",
-                                )
-                              }
-                              className="bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-bold px-4 py-2 cursor-pointer flex items-center gap-1"
-                            >
-                              <CheckCircle className="w-3.5 h-3.5" /> Hoàn Thành
-                            </Button>
-                            <Button
-                              onClick={() =>
-                                handleUpdateBookingStatus(
-                                  booking.id,
-                                  "CANCELLED",
-                                )
-                              }
-                              variant="outline"
-                              className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 rounded-full text-xs font-bold px-4 py-2 cursor-pointer flex items-center gap-1"
-                            >
-                              <X className="w-3.5 h-3.5" /> Hủy Lịch
-                            </Button>
-                          </>
-                        )}
-                      </>
-                    )}
+                  {/* Actions & Detail trigger */}
+                  <div className="flex gap-2 w-full lg:w-auto justify-between lg:justify-end items-center self-stretch lg:self-center shrink-0 border-t lg:border-t-0 pt-3 lg:pt-0 mt-2 lg:mt-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedDetailBooking(booking)}
+                      className="text-xs font-semibold text-gray-500 hover:text-[#E4187D] hover:bg-pink-50 rounded-full flex items-center gap-1 px-4 cursor-pointer"
+                    >
+                      Chi tiết <ChevronRight className="w-3.5 h-3.5" />
+                    </Button>
+                    
+                    <div className="flex gap-1.5">
+                      {updatingBookingId === booking.id ? (
+                        <div className="flex items-center gap-1.5 text-gray-400 text-xs font-semibold py-1.5 px-3">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-[#E4187D]" />
+                          Đang lưu...
+                        </div>
+                      ) : (
+                        <>
+                          {booking.status === "PENDING" && (
+                            <>
+                              <Button
+                                onClick={() =>
+                                  handleUpdateBookingStatus(
+                                    booking.id,
+                                    "CONFIRMED",
+                                  )
+                                }
+                                className="bg-green-600 hover:bg-green-700 text-white rounded-full text-xs font-bold px-4 py-1.5 cursor-pointer flex items-center gap-1 shadow-sm transition-colors"
+                              >
+                                <Check className="w-3.5 h-3.5" /> Chấp Nhận
+                              </Button>
+                              <Button
+                                onClick={() =>
+                                  handleUpdateBookingStatus(
+                                    booking.id,
+                                    "CANCELLED",
+                                  )
+                                }
+                                variant="outline"
+                                className="border-red-200 text-red-650 hover:bg-red-50 hover:text-red-750 rounded-full text-xs font-bold px-4 py-1.5 cursor-pointer flex items-center gap-1 transition-colors"
+                              >
+                                <X className="w-3.5 h-3.5" /> Từ Chối
+                              </Button>
+                            </>
+                          )}
+                          {booking.status === "CONFIRMED" && (
+                            <>
+                              <Button
+                                onClick={() =>
+                                  handleUpdateBookingStatus(
+                                    booking.id,
+                                    "COMPLETED",
+                                  )
+                                }
+                                className="bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-bold px-4 py-1.5 cursor-pointer flex items-center gap-1 shadow-sm transition-colors"
+                              >
+                                <CheckCircle className="w-3.5 h-3.5" /> Hoàn Thành
+                              </Button>
+                              <Button
+                                onClick={() =>
+                                  handleUpdateBookingStatus(
+                                    booking.id,
+                                    "CANCELLED",
+                                  )
+                                }
+                                variant="outline"
+                                className="border-red-200 text-red-650 hover:bg-red-50 hover:text-red-750 rounded-full text-xs font-bold px-4 py-1.5 cursor-pointer flex items-center gap-1 transition-colors"
+                              >
+                                <X className="w-3.5 h-3.5" /> Hủy Lịch
+                              </Button>
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -962,14 +1168,14 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
                         className={
                           r.status === "APPROVED"
                             ? "bg-green-50 text-green-700 hover:bg-green-50 border-green-200"
-                            : r.status === "HIDDEN"
+                            : r.status === "REJECTED"
                               ? "bg-red-50 text-red-700 hover:bg-red-50 border-red-200"
                               : "bg-yellow-50 text-yellow-700 hover:bg-yellow-50 border-yellow-200"
                         }
                       >
                         {r.status === "APPROVED"
                           ? "Đã Duyệt"
-                          : r.status === "HIDDEN"
+                          : r.status === "REJECTED"
                             ? "Đã Ẩn"
                             : "Chờ Duyệt"}
                       </Badge>
@@ -1240,6 +1446,203 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
         </div>
       )}
 
+      {/* BOOKING DETAIL MODAL */}
+      {selectedDetailBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl w-full max-w-lg p-6 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto animate-scale-up">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-gray-500" />
+                <h2 className="text-xl font-bold text-gray-900">Chi Tiết Lịch Hẹn</h2>
+              </div>
+              <button
+                onClick={() => setSelectedDetailBooking(null)}
+                className="text-gray-400 hover:text-gray-600 font-bold text-xl cursor-pointer"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="space-y-5">
+              {/* Customer and Service summary */}
+              <div className="bg-pink-50/30 p-4 rounded-2xl border border-pink-100/20 space-y-3">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-extrabold text-gray-900 text-lg leading-tight">
+                      {selectedDetailBooking.serviceName}
+                    </h3>
+                    <p className="text-xs text-gray-400 mt-1">ID Đơn: {selectedDetailBooking.id}</p>
+                  </div>
+                  <Badge
+                    className={
+                      selectedDetailBooking.status === "CONFIRMED"
+                        ? "bg-green-100 text-green-700 hover:bg-green-100 border-none font-bold"
+                        : selectedDetailBooking.status === "COMPLETED"
+                          ? "bg-blue-100 text-blue-700 hover:bg-blue-100 border-none font-bold"
+                          : selectedDetailBooking.status === "CANCELLED"
+                            ? "bg-red-100 text-red-700 hover:bg-red-100 border-none font-bold"
+                            : "bg-yellow-100 text-yellow-700 hover:bg-yellow-100 border-none font-bold"
+                    }
+                  >
+                    {selectedDetailBooking.status === "PENDING"
+                      ? "Chờ Xác Nhận"
+                      : selectedDetailBooking.status === "CONFIRMED"
+                        ? "Đã Xác Nhận"
+                        : selectedDetailBooking.status === "COMPLETED"
+                          ? "Đã Hoàn Thành"
+                          : "Đã Hủy"}
+                  </Badge>
+                </div>
+                
+                <div className="border-t border-dashed border-pink-100/50 pt-2 flex flex-col sm:flex-row justify-between gap-2 text-sm text-gray-650 text-gray-600">
+                  <p>
+                    <span className="font-semibold text-gray-500">Khách hàng:</span>{" "}
+                    <span className="font-bold text-gray-800">
+                      {selectedDetailBooking.customerDisplayName || "Chưa cập nhật"}
+                    </span>
+                  </p>
+                  <p>
+                    <span className="font-semibold text-gray-500">Nghệ sĩ phụ trách:</span>{" "}
+                    <span className="font-bold text-gray-800">
+                      {selectedDetailBooking.artistName || "Chưa cập nhật"}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Date & Time details */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100 space-y-1">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Ngày Hẹn</span>
+                  <div className="flex items-center gap-1.5 font-bold text-gray-800">
+                    <Calendar className="w-4 h-4 text-[#E4187D] shrink-0" />
+                    <span>{selectedDetailBooking.bookingDate.split("-").reverse().join("/")}</span>
+                  </div>
+                </div>
+                <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100 space-y-1">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Thời Gian</span>
+                  <div className="flex items-center gap-1.5 font-bold text-gray-800">
+                    <Clock className="w-4 h-4 text-[#E4187D] shrink-0" />
+                    <span>
+                      {selectedDetailBooking.startTime.slice(0, 5)} - {selectedDetailBooking.endTime.slice(0, 5)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Price Calculation summary */}
+              <div className="bg-gray-50/50 border border-gray-100 p-4 rounded-2xl space-y-3">
+                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Chi Tiết Thanh Toán</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between text-gray-600">
+                    <span>Giá dịch vụ gốc:</span>
+                    <span className="font-medium">{formatPrice(selectedDetailBooking.servicePrice || selectedDetailBooking.totalAmount)}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-800 font-bold border-t border-dashed border-gray-200 pt-2 text-base">
+                    <span>Tổng số tiền:</span>
+                    <span className="text-[#E4187D]">{formatPrice(selectedDetailBooking.totalAmount)}</span>
+                  </div>
+                  <div className="flex justify-between text-green-700 bg-green-50 p-2.5 rounded-xl text-xs font-medium items-center border border-green-100/50">
+                    <span className="flex items-center gap-1">
+                      <Wallet className="w-3.5 h-3.5 text-green-600" />
+                      Khách đã đặt cọc (55%):
+                    </span>
+                    <span className="font-bold">{formatPrice(selectedDetailBooking.depositAmount)}</span>
+                  </div>
+                  <div className="flex justify-between text-pink-700 bg-pink-50/60 p-2.5 rounded-xl text-xs font-medium items-center border border-pink-100/30">
+                    <span className="flex items-center gap-1">
+                      <Wallet className="w-3.5 h-3.5 text-[#E4187D]" />
+                      Còn lại cần thu tại tiệm (45%):
+                    </span>
+                    <span className="font-bold">{formatPrice(selectedDetailBooking.totalAmount - selectedDetailBooking.depositAmount)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 justify-between pt-4 border-t border-gray-100">
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  className="rounded-full px-5 text-gray-500 cursor-pointer"
+                  onClick={() => setSelectedDetailBooking(null)}
+                >
+                  Đóng
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="rounded-full p-2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                  title="Sao chép ID đơn đặt"
+                  onClick={() => {
+                    navigator.clipboard.writeText(selectedDetailBooking.id);
+                    toast.success("Đã sao chép ID đơn đặt lịch!");
+                  }}
+                >
+                  <Copy className="w-4 h-4" />
+                </Button>
+              </div>
+
+              <div className="flex gap-2 shrink-0">
+                {updatingBookingId === selectedDetailBooking.id ? (
+                  <div className="flex items-center gap-1.5 text-gray-400 text-xs font-semibold py-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-[#E4187D]" />
+                    Đang lưu...
+                  </div>
+                ) : (
+                  <>
+                    {selectedDetailBooking.status === "PENDING" && (
+                      <>
+                        <Button
+                          onClick={async () => {
+                            await handleUpdateBookingStatus(selectedDetailBooking.id, "CONFIRMED");
+                            setSelectedDetailBooking(prev => prev ? { ...prev, status: "CONFIRMED" } : null);
+                          }}
+                          className="bg-green-600 hover:bg-green-700 text-white rounded-full font-bold text-xs px-4 cursor-pointer flex items-center gap-1"
+                        >
+                          <Check className="w-3.5 h-3.5" /> Chấp Nhận
+                        </Button>
+                        <Button
+                          onClick={async () => {
+                            await handleUpdateBookingStatus(selectedDetailBooking.id, "CANCELLED");
+                            setSelectedDetailBooking(prev => prev ? { ...prev, status: "CANCELLED" } : null);
+                          }}
+                          variant="outline"
+                          className="border-red-200 text-red-650 hover:bg-red-50 hover:text-red-750 rounded-full font-bold text-xs px-4 cursor-pointer flex items-center gap-1"
+                        >
+                          <X className="w-3.5 h-3.5" /> Từ Chối
+                        </Button>
+                      </>
+                    )}
+                    {selectedDetailBooking.status === "CONFIRMED" && (
+                      <>
+                        <Button
+                          onClick={async () => {
+                            await handleUpdateBookingStatus(selectedDetailBooking.id, "COMPLETED");
+                            setSelectedDetailBooking(prev => prev ? { ...prev, status: "COMPLETED" } : null);
+                          }}
+                          className="bg-blue-600 hover:bg-blue-700 text-white rounded-full font-bold text-xs px-4 cursor-pointer flex items-center gap-1"
+                        >
+                          <CheckCircle className="w-3.5 h-3.5" /> Hoàn Thành
+                        </Button>
+                        <Button
+                          onClick={async () => {
+                            await handleUpdateBookingStatus(selectedDetailBooking.id, "CANCELLED");
+                            setSelectedDetailBooking(prev => prev ? { ...prev, status: "CANCELLED" } : null);
+                          }}
+                          variant="outline"
+                          className="border-red-200 text-red-655 hover:bg-red-50 hover:text-red-700 rounded-full font-bold text-xs px-4 cursor-pointer flex items-center gap-1"
+                        >
+                          <X className="w-3.5 h-3.5" /> Hủy Lịch
+                        </Button>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
