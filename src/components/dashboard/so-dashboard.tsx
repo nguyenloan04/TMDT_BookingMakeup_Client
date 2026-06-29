@@ -1352,7 +1352,7 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
                           setImageError("");
                           const url = await uploadServiceImage(file);
                           setServiceImageUrl(url);
-                        } catch (err: any) {
+                        } catch (err: unknown) {
                           setImageError(err instanceof Error ? err.message : "Không thể upload ảnh, vui lòng thử lại.");
                         } finally {
                           setIsUploadingImage(false);
