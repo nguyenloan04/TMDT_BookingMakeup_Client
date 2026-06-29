@@ -2,7 +2,6 @@
 
 import { useEffect, useState, use } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { Star, MapPin, CheckCircle2, Heart, Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Header from "@/components/header";
@@ -12,10 +11,12 @@ import { defaultAvatar } from "@/common/constant/default-avatar";
 import { useRouter } from "next/navigation";
 import { SERVICE_DEPOSITE_AMOUNT } from "@/common/constant/service-deposite";
 import { ProviderProfileResponse } from "@/types/service-provider";
+import { useAuth } from "@/contexts/auth-context";
 
 export default function ProviderProfilePage({ params }: { params: Promise<{ id: string }> }) {
     const resolvedParams = use(params);
     const router = useRouter();
+    const { user } = useAuth()
 
     const [data, setData] = useState<ProviderProfileResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -99,8 +100,26 @@ export default function ProviderProfilePage({ params }: { params: Promise<{ id: 
                             </div>
 
                             <div className="flex flex-wrap gap-3">
-                                <Button className="bg-[#E4187D] hover:bg-[#c9126b] text-white rounded-full px-8">Đặt lịch ngay</Button>
-                                <Button variant="outline" className="border-pink-200 text-[#E4187D] hover:bg-pink-50 rounded-full px-8">Liên hệ</Button>
+                                {/* <Button className="bg-[#E4187D] hover:bg-[#c9126b] text-white rounded-full px-8">Đặt lịch ngay</Button> */}
+                                {/* <Button variant="outline" className="border-pink-200 text-[#E4187D] hover:bg-pink-50 rounded-full px-8">Liên hệ</Button> */}
+                                <Button
+                                    onClick={() => {
+                                        if (!user) {
+                                            router.push(`/login`);
+                                            return;
+                                        }
+                                        const query = new URLSearchParams({
+                                            userId: data.ownerId,
+                                            name: data.displayName,
+                                            avatar: data.avatarUrl || ''
+                                        }).toString();
+
+                                        router.push(`/chat?${query}`);
+                                    }}
+                                    className="bg-[#E4187D] hover:bg-[#c9126b] text-white rounded-full px-8"
+                                >
+                                    Liên hệ
+                                </Button>
                                 <Button variant="outline" className="border-gray-200 text-gray-600 hover:bg-gray-50 rounded-full px-4">
                                     <Heart className="w-4 h-4 mr-2" /> Theo dõi
                                 </Button>
@@ -116,22 +135,35 @@ export default function ProviderProfilePage({ params }: { params: Promise<{ id: 
 
                     <div className="bg-white rounded-3xl p-8 shadow-sm">
                         <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-xl font-bold text-gray-900">Đội ngũ Artist</h2>
-                            <span className="text-sm text-[#E4187D] font-medium cursor-pointer">Xem tất cả ({data.artists?.length || 0})</span>
+                            <h2 className="text-xl font-bold text-gray-900">Danh mục dịch vụ</h2>
+                            <span className="text-sm text-[#E4187D] font-medium cursor-pointer">Xem tất cả ({data.services?.length || 0})</span>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {data.artists?.map((art) => (
-                                <div key={art.id} className="flex gap-4 border border-gray-100 rounded-2xl p-4">
-                                    <Image src={art.avatarUrl || defaultAvatar} alt={art.displayName} width={80} height={80} className="rounded-xl object-cover" unoptimized />
-                                    <div>
-                                        <div className="flex justify-between items-start">
-                                            <h3 className="font-bold text-gray-900">{art.displayName}</h3>
-                                            <span className="text-[#E4187D] text-xs font-bold flex items-center"><Star className="w-3 h-3 fill-current mr-1" /> {art.rating}</span>
-                                        </div>
-                                        <p className="text-xs text-gray-500 line-clamp-1 mb-2">Chuyên: {art.specialty}</p>
+                        <div className="grid grid-cols-1 gap-4">
+                            {data.services?.map((svc) => (
+                                <div key={svc.id}
+                                    className="flex justify-between items-center border border-gray-50 bg-gray-100/70 p-4 rounded-2xl hover:bg-gray-100/40"
+                                >
+                                    <div className="flex-1 pr-4">
+                                        <h3 className="font-bold text-lg text-gray-900 line-clamp-2">{svc.name}</h3>
+                                        <p className="text-xs text-gray-500 mt-1">⏱ {svc.duration} phút</p>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                        <p className="text-xs text-gray-400">Giá từ</p>
+                                        <p className="font-bold text-[#E4187D] text-xl mb-2">{Math.round(svc.price * SERVICE_DEPOSITE_AMOUNT).toLocaleString('vi-VN')}đ</p>
                                         <div className="flex gap-2">
-                                            <Button variant="outline" size="sm" className="h-7 text-xs rounded-full">Xem hồ sơ</Button>
-                                            <Button size="sm" className="h-7 text-xs bg-[#E4187D] text-white rounded-full">Chọn artist</Button>
+                                            <Button
+                                                size="sm" className="cursor-pointer h-7 bg-white border-[#E4187D] text-[#E4187D] hover:bg-pink-50 rounded-full p-4 w-fit"
+                                                onClick={() => router.push(`/services/${svc.id}`)}
+                                            >
+                                                Xem chi tiết
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                className="cursor-pointer h-7 bg-[#E4187D] hover:bg-[#c9126b] text-white rounded-full p-4 w-fit"
+                                                onClick={() => router.push(`/booking/${svc.id}`)}
+                                            >
+                                                Đặt lịch
+                                            </Button>
                                         </div>
                                     </div>
                                 </div>
@@ -141,24 +173,30 @@ export default function ProviderProfilePage({ params }: { params: Promise<{ id: 
                 </div>
 
                 <div className="lg:col-span-4 space-y-6">
-                    <div className="bg-white rounded-3xl p-6 shadow-sm">
-                        <h2 className="text-lg font-bold text-gray-900 mb-4">Danh mục dịch vụ</h2>
-                        <div className="space-y-4">
-                            {data.services?.map((svc) => (
-                                <div key={svc.id} className="flex justify-between items-center border border-gray-50 bg-gray-50/50 p-4 rounded-2xl">
-                                    <div>
-                                        <h3 className="font-bold text-gray-900 text-sm">{svc.name}</h3>
-                                        <p className="text-xs text-gray-500 mt-1">⏱ {svc.duration} phút</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-xs text-gray-400">Giá từ</p>
-                                        <p className="font-bold text-gray-900 text-sm mb-2">{Math.round(svc.price * SERVICE_DEPOSITE_AMOUNT).toLocaleString('vi-VN')}đ</p>
 
-                                        <Link href={`/services/${svc.id}`}>
-                                            <Button size="sm" className="h-7 text-xs bg-[#E4187D] text-white rounded-full px-4 w-full">
-                                                Đặt lịch
+                    <div className="bg-white rounded-3xl p-6 shadow-sm">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-lg font-bold text-gray-900">Đội ngũ Artist</h2>
+                            <span className="text-xs text-[#E4187D] font-medium cursor-pointer">Xem tất cả</span>
+                        </div>
+                        <div className="space-y-4">
+                            {data.artists?.map((art) => (
+                                <div key={art.id} className="flex gap-3 items-center border border-gray-50 bg-gray-50/50 rounded-2xl p-3">
+                                    <Image src={art.avatarUrl || defaultAvatar} alt={art.displayName} width={60} height={60} className="rounded-xl object-cover w-14 h-14" unoptimized />
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-start">
+                                            <h3 className="font-bold text-gray-900 text-sm">{art.displayName}</h3>
+                                            <span className="text-[#E4187D] text-xs font-bold flex items-center"><Star className="w-3 h-3 fill-current mr-1" /> {art.rating}</span>
+                                        </div>
+                                        <p className="text-xs text-gray-500 line-clamp-1 mb-2">Chuyên: {art.specialty}</p>
+                                        {user &&
+                                            <Button
+                                                size="sm" className="cursor-pointer h-6 text-xs bg-white border-[#E4187D] text-[#E4187D] hover:bg-pink-50 rounded-full p-2 w-fit"
+                                                onClick={() => router.push(`/artists/${art.id}`)}
+                                            >
+                                                Xem hồ sơ
                                             </Button>
-                                        </Link>
+                                        }
                                     </div>
                                 </div>
                             ))}

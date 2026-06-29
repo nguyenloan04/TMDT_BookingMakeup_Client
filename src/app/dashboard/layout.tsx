@@ -2,35 +2,35 @@
 
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, Suspense, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Palette, 
-  Home, 
-  MessageSquare, 
-  LogOut, 
-  ShieldCheck, 
-  User, 
-  Sparkles, 
-  Loader2 
+import {
+  Palette,
+  Home,
+  MessageSquare,
+  LogOut,
+  ShieldCheck,
+  Loader2
 } from "lucide-react";
-import { defaultAvatar } from "@/common/constant/default-avatar";
+import { Playwrite_US_Trad } from "next/font/google";
+
+const logoFont = Playwrite_US_Trad({
+  weight: ["400"],
+});
+
+const emptySubscribe = () => () => { };
 
 function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const { user, logout, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [mounted, setMounted] = useState(false);
+
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    // If not logged in and auth finished loading, redirect to login
     if (!authLoading && !user && mounted) {
       router.push("/login?redirect=/dashboard");
     }
@@ -58,11 +58,14 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
       <aside className="w-80 bg-white border-r border-gray-100 flex flex-col justify-between p-6 shrink-0 h-full">
         <div className="space-y-8 flex flex-col h-[75%]">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="bg-[#E4187D] rounded-full p-2 flex items-center justify-center transition-colors group-hover:bg-[#c9126b] shadow-sm">
+          <Link
+            className="flex items-center gap-2 group shrink-0"
+            href="/"
+          >
+            <div className="bg-[#E4187D] rounded-full p-1.5 flex items-center justify-center transition-colors group-hover:bg-[#c9126b] shadow-sm">
               <Palette className="w-5 h-5 text-white" strokeWidth={2.5} />
             </div>
-            <span className="text-xl font-black text-[#E4187D] tracking-tight">
+            <span className={`text-2xl text-[#E4187D] tracking-tight hidden sm:block ${logoFont.className}`}>
               BookingMakeup
             </span>
           </Link>
@@ -70,12 +73,12 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
           {/* Sidebar Nav */}
           <nav className="space-y-2 flex-1 overflow-y-auto">
             <div className="text-[10px] uppercase font-extrabold text-gray-400 tracking-wider mb-3 px-3">Hệ thống</div>
-            
+
             <Link href="/" className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-600 hover:bg-pink-50/50 hover:text-[#E4187D] transition-colors text-sm font-semibold">
               <Home className="w-4 h-4 text-gray-400" />
               <span>Trang chủ</span>
             </Link>
-            
+
             <Link href="/chat" className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-600 hover:bg-pink-50/50 hover:text-[#E4187D] transition-colors text-sm font-semibold">
               <MessageSquare className="w-4 h-4 text-gray-400" />
               <span>Trò chuyện (Chat)</span>
@@ -116,8 +119,8 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Logout */}
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             onClick={() => logout()}
             className="w-full justify-start rounded-xl text-red-600 hover:bg-red-50 text-sm font-semibold cursor-pointer"
           >

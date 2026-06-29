@@ -1,1 +1,1 @@
-export const SERVICE_DEPOSITE_AMOUNT = 1.15
+export const SERVICE_DEPOSITE_AMOUNT = 0.55

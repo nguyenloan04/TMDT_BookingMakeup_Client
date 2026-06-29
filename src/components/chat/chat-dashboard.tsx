@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Search, MessageCircleMore } from "lucide-react";
 import ChatBox from "./chat-box";
@@ -13,9 +12,18 @@ import { chatService } from "@/services/chat-service";
 interface ChatDashboardProps {
     currentUserId: string;
     apiUrl: string;
+    initialTargetUserId?: string | null;
+    initialTargetName?: string | null;
+    initialTargetAvatar?: string | null;
 }
 
-export default function ChatDashboard({ currentUserId, apiUrl }: ChatDashboardProps) {
+export default function ChatDashboard({
+    currentUserId,
+    apiUrl,
+    initialTargetUserId,
+    initialTargetName,
+    initialTargetAvatar
+}: ChatDashboardProps) {
     const [rooms, setRooms] = useState<ChatRoom[]>([]);
     const [selectedRoom, setSelectedRoom] = useState<ChatRoom | null>(null);
     const [filter, setFilter] = useState<"ALL" | "UNREAD">("ALL");
@@ -23,17 +31,40 @@ export default function ChatDashboard({ currentUserId, apiUrl }: ChatDashboardPr
 
     useEffect(() => {
         const fetchRooms = async () => {
+            let loadedRooms: ChatRoom[] = [];
+
             try {
-                const data = await chatService.getChatRooms(apiUrl, currentUserId);
-                setRooms(data);
+                loadedRooms = await chatService.getChatRooms(apiUrl, currentUserId);
             } catch (error) {
-                console.error("Failed to load chat rooms from server:", error);
-                setRooms([]);
+                console.warn("User chưa có phòng chat nào trên server:", error);
+                loadedRooms = [];
             }
+
+            if (initialTargetUserId) {
+                const existingRoom = loadedRooms.find(r => r.recipientId === initialTargetUserId);
+
+                if (existingRoom) {
+                    setSelectedRoom(existingRoom);
+                } else {
+                    const tempRoom: ChatRoom = {
+                        id: `temp_${initialTargetUserId}`,
+                        recipientId: initialTargetUserId,
+                        recipientName: initialTargetName || "Artist",
+                        recipientAvatar: initialTargetAvatar || "",
+                        lastMessage: "Bắt đầu cuộc trò chuyện mới...",
+                        lastMessageTime: "Bây giờ",
+                        unreadCount: 0
+                    };
+                    loadedRooms = [tempRoom, ...loadedRooms];
+                    setSelectedRoom(tempRoom);
+                }
+            }
+
+            setRooms(loadedRooms);
         };
 
         if (currentUserId) fetchRooms();
-    }, [apiUrl, currentUserId]);
+    }, [apiUrl, currentUserId, initialTargetUserId, initialTargetName, initialTargetAvatar]);
 
     const filteredRooms = rooms.filter(room => {
         const matchesFilter = filter === "UNREAD" ? room.unreadCount > 0 : true;
@@ -42,9 +73,9 @@ export default function ChatDashboard({ currentUserId, apiUrl }: ChatDashboardPr
     });
 
     return (
-        <div className="flex flex-col h-screen bg-[#F9FAFB]">
+        <div className="flex flex-col h-full bg-[#F9FAFB]">
             <div className="flex flex-1 overflow-hidden">
-                <aside className="w-80 bg-white border-r border-gray-100 flex flex-col">
+                <aside className="w-80 bg-white border-r border-gray-100 flex flex-col shrink-0">
                     <div className="p-4 relative">
                         <Search className="w-4 h-4 text-gray-400 absolute left-7 top-7" />
                         <Input
@@ -75,7 +106,7 @@ export default function ChatDashboard({ currentUserId, apiUrl }: ChatDashboardPr
                     <ScrollArea className="flex-1">
                         <div className="p-2 space-y-1">
                             {filteredRooms.map((room) => {
-                                const isSelected = selectedRoom?.id === room.id;
+                                const isSelected = selectedRoom?.recipientId === room.recipientId;
                                 return (
                                     <div
                                         key={room.id}
@@ -87,19 +118,18 @@ export default function ChatDashboard({ currentUserId, apiUrl }: ChatDashboardPr
                                             }`}
                                     >
                                         <div className="relative shrink-0">
-                                            <Avatar className="w-11 h-11 border">
+                                            <Avatar className="w-11 h-11 border border-pink-100">
                                                 <AvatarImage src={room.recipientAvatar} alt={room.recipientName} className="object-cover" />
                                                 <AvatarFallback className="bg-pink-100 text-[#E4187D] font-bold">
                                                     {room.recipientName ? room.recipientName[0].toUpperCase() : "U"}
                                                 </AvatarFallback>
                                             </Avatar>
-                                            <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
                                         </div>
 
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center justify-between mb-0.5">
                                                 <h4 className="text-sm font-semibold text-gray-900 truncate">{room.recipientName}</h4>
-                                                <span className="text-[10px] text-gray-400 font-medium">{room.lastMessageTime}</span>
+                                                <span className="text-[10px] text-gray-400 font-medium shrink-0">{room.lastMessageTime}</span>
                                             </div>
                                             <p className={`text-xs truncate ${room.unreadCount > 0 ? "text-gray-900 font-semibold" : "text-gray-400"}`}>
                                                 {room.lastMessage}
@@ -142,18 +172,15 @@ function EmptyState() {
             <div className="mb-6">
                 <Avatar className="w-24 h-24 rounded-2xl border-2 border-gray-100">
                     <AvatarImage src="" alt="Artist profile default" />
-                    <AvatarFallback className="bg-slate-900 text-white font-bold text-xl rounded-2xl">
+                    <AvatarFallback className="bg-pink-50 text-[#E4187D] rounded-2xl">
                         <MessageCircleMore size={"3rem"} />
                     </AvatarFallback>
                 </Avatar>
             </div>
             <h3 className="text-lg font-bold text-gray-900 mb-2">Kết nối với Artist</h3>
             <p className="text-sm text-gray-400 max-w-sm mb-6 leading-relaxed">
-                Chọn một cuộc hội thoại từ danh sách bên trái để xem nội dung chi tiết hoặc bắt đầu nhắn tin.
+                Chọn một cuộc hội thoại từ danh sách bên trái hoặc truy cập hồ sơ Artist để bắt đầu trò chuyện.
             </p>
-            <Button className="bg-[#E4187D] hover:bg-[#c9126b] text-white px-6 py-2.5 rounded-xl shadow-sm transition-all font-semibold text-sm">
-                Tìm Artist Ngay
-            </Button>
         </div>
     );
 }

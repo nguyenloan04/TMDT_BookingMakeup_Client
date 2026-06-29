@@ -1,15 +1,17 @@
-"use client";
+"use client"
 
 import { apiUrl } from "@/common/constant/api-url";
 import ChatDashboard from "@/components/chat/chat-dashboard";
-import Footer from "@/components/footer";
 import Header from "@/components/header";
 import { useAuth } from "@/contexts/auth-context";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
-export default function ChatPage() {
-    const { user } = useAuth()
+function ChatPageContent() {
+    const { user } = useAuth();
+    const searchParams = useSearchParams();
 
-    if (!user) return null
+    if (!user) return null;
 
     if (!user?.id) {
         return (
@@ -20,13 +22,29 @@ export default function ChatPage() {
     }
 
     return (
-        <div>
+        <div className="flex flex-col h-screen overflow-hidden">
             <Header />
-            <ChatDashboard
-                currentUserId={user.id}
-                apiUrl={apiUrl}
-            />
-            <Footer />
+            <main className="flex-1 min-h-0 bg-white">
+                <ChatDashboard
+                    currentUserId={user.id}
+                    apiUrl={apiUrl}
+                    initialTargetUserId={searchParams.get("userId")}
+                    initialTargetName={searchParams.get("name")}
+                    initialTargetAvatar={searchParams.get("avatar")}
+                />
+            </main>
         </div>
+    );
+}
+
+export default function ChatPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex h-screen items-center justify-center bg-[#F9FAFB]">
+                <p className="text-sm text-gray-500 animate-pulse">Đang tải...</p>
+            </div>
+        }>
+            <ChatPageContent />
+        </Suspense>
     );
 }
