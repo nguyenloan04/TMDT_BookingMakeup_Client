@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { Heart, Loader2 } from "lucide-react";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 
 import { getFavourites, removeFavourite } from "@/lib/api";
 import { ServiceDto } from "@/types/service";
@@ -99,6 +101,11 @@ export default function CustomerDashboard() {
                   </CardHeader>
                   <CardFooter className="p-4 pt-4 flex justify-between items-center gap-3 border-t border-gray-50 mt-4">
                     <span className="text-lg font-extrabold text-[#E4187D]">{formatPrice(svc.price)}</span>
+                    <Link href={`/services/${svc.id}`}>
+                      <Button className="bg-[#E4187D] hover:bg-[#c9126b] text-white rounded-full px-6 font-semibold cursor-pointer text-xs">
+                        Xem chi tiết
+                      </Button>
+                    </Link>
                   </CardFooter>
                 </Card>
               ))}
