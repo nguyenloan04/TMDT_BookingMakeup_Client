@@ -40,6 +40,11 @@ import {
   createService,
   updateService,
   deleteService,
+  getPromotions,
+  createPromotion,
+  updatePromotion,
+  deletePromotion,
+  getReviewsByArtist,
 } from "@/lib/api";
 import { getMyBookings, updateBookingStatus } from "@/lib/api/booking";
 import { uploadServiceImage } from "@/services/upload-service";
@@ -47,6 +52,8 @@ import { uploadServiceImage } from "@/services/upload-service";
 import { ServiceOwnerProfileDto } from "@/types/user";
 import { ServiceDto } from "@/types/service";
 import { BookingDto, BookingStatus } from "@/types/booking";
+import { PromotionDto } from "@/types/promotion";
+import { ReviewDto } from "@/types/review";
 
 interface SoDashboardProps {
   userId: string;
@@ -54,7 +61,7 @@ interface SoDashboardProps {
 
 export default function SoDashboard({ userId }: SoDashboardProps) {
   const [activeTab, setActiveTab] = useState<
-    "profile" | "services" | "bookings"
+    "profile" | "services" | "bookings" | "promotions" | "reviews"
   >("services");
   const [loading, setLoading] = useState(false);
 
@@ -98,10 +105,26 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
   const [bookingDateFilter, setBookingDateFilter] = useState("");
   const [selectedDetailBooking, setSelectedDetailBooking] = useState<BookingDto | null>(null);
 
+  // Promotions State
+  const [promotions, setPromotions] = useState<PromotionDto[]>([]);
+  const [promoModalOpen, setPromoModalOpen] = useState(false);
+  const [editingPromo, setEditingPromo] = useState<PromotionDto | null>(null);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoDiscount, setPromoDiscount] = useState(10000);
+  const [promoMinOrder, setPromoMinOrder] = useState(50000);
+  const [promoPointCharge, setPromoPointCharge] = useState(0);
+  const [promoExpiry, setPromoExpiry] = useState("");
+  const [savingPromo, setSavingPromo] = useState(false);
+
+  // Reviews State
+  const [reviews, setReviews] = useState<ReviewDto[]>([]);
+
   useEffect(() => {
     fetchProfile();
     fetchServices();
     fetchBookings();
+    fetchPromotionsList();
+    fetchReviewsList();
   }, []);
 
   // 1. PROFILE FLOWS
@@ -120,6 +143,14 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
     }
   };
 
+  const fetchReviewsList = async () => {
+    try {
+      const list = await getReviewsByArtist(userId);
+      setReviews(list);
+    } catch {
+      // ignore
+    }
+  };
 
   const handleSaveProfile = async () => {
     setSavingProfile(true);
@@ -256,7 +287,88 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
     }
   };
 
+  // 4. PROMOTIONS FLOWS
+  const fetchPromotionsList = async () => {
+    try {
+      const list = await getPromotions();
+      setPromotions(list);
+    } catch {
+      toast.error("Không thể tải danh sách khuyến mãi");
+    }
+  };
 
+  const handleOpenAddPromo = () => {
+    setEditingPromo(null);
+    setPromoCode("");
+    setPromoDiscount(10000);
+    setPromoMinOrder(50000);
+    setPromoPointCharge(0);
+    const nextWeek = new Date();
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    setPromoExpiry(nextWeek.toISOString().slice(0, 16));
+    setPromoModalOpen(true);
+  };
+
+  const handleOpenEditPromo = (promo: PromotionDto) => {
+    setEditingPromo(promo);
+    setPromoCode(promo.code);
+    setPromoDiscount(promo.discountValue);
+    setPromoMinOrder(promo.minOrderValue);
+    setPromoPointCharge(promo.pointCharge || 0);
+    setPromoExpiry(promo.expiryDate.slice(0, 16));
+    setPromoModalOpen(true);
+  };
+
+  const handleSavePromo = async () => {
+    if (
+      !promoCode.trim() ||
+      promoDiscount <= 0 ||
+      promoMinOrder < 0 ||
+      !promoExpiry
+    ) {
+      toast.error("Vui lòng nhập đầy đủ thông tin mã giảm giá");
+      return;
+    }
+    setSavingPromo(true);
+    try {
+      const formattedExpiry = new Date(promoExpiry).toISOString();
+      if (editingPromo) {
+        await updatePromotion(editingPromo.id, {
+          discountValue: promoDiscount,
+          minOrderValue: promoMinOrder,
+          pointCharge: promoPointCharge,
+          expiryDate: formattedExpiry,
+        });
+        toast.success("Cập nhật khuyến mãi thành công!");
+      } else {
+        await createPromotion({
+          code: promoCode.trim().toUpperCase(),
+          discountValue: promoDiscount,
+          minOrderValue: promoMinOrder,
+          pointCharge: promoPointCharge,
+          expiryDate: formattedExpiry,
+        });
+        toast.success("Tạo khuyến mãi thành công!");
+      }
+      setPromoModalOpen(false);
+      fetchPromotionsList();
+    } catch (e: any) {
+      toast.error(e.response?.data || "Thao tác thất bại");
+    } finally {
+      setSavingPromo(false);
+    }
+  };
+
+  const handleDeletePromo = async (id: string) => {
+    if (!confirm("Bạn có chắc chắn muốn xóa mã giảm giá này?")) return;
+    try {
+      await deletePromotion(id);
+      toast.success("Xóa mã giảm giá thành công!");
+      fetchPromotionsList();
+    } catch (e: any) {
+      toast.error(e.response?.data || "Không thể xóa khuyến mãi");
+    }
+  };
 
   const formatPrice = (p: number) => {
     return new Intl.NumberFormat("vi-VN", {
@@ -320,14 +432,34 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
           Quản Lý Đặt Lịch ({bookings.length})
         </button>
         <button
+          onClick={() => setActiveTab("promotions")}
+          className={`pb-2 px-1 font-semibold transition-all border-b-2 text-sm cursor-pointer ${
+            activeTab === "promotions"
+              ? "border-[#E4187D] text-[#E4187D]"
+              : "border-transparent text-gray-500 hover:text-gray-900"
+          }`}
+        >
+          Mã Khuyến Mãi ({promotions.length})
+        </button>
+        <button
           onClick={() => setActiveTab("profile")}
           className={`pb-2 px-1 font-semibold transition-all border-b-2 text-sm cursor-pointer ${
             activeTab === "profile"
               ? "border-[#E4187D] text-[#E4187D]"
-              : "border-transparent text-gray-500 hover:text-gray-905"
+              : "border-transparent text-gray-500 hover:text-gray-900"
           }`}
         >
           Hồ Sơ Cửa Hàng
+        </button>
+        <button
+          onClick={() => setActiveTab("reviews")}
+          className={`pb-2 px-1 font-semibold transition-all border-b-2 text-sm cursor-pointer ${
+            activeTab === "reviews"
+              ? "border-[#E4187D] text-[#E4187D]"
+              : "border-transparent text-gray-500 hover:text-gray-900"
+          }`}
+        >
+          Đánh Giá ({reviews.length})
         </button>
       </div>
 
@@ -765,6 +897,113 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
         </div>
       )}
 
+      {/* TAB 3: MANAGE PROMOTIONS */}
+      {activeTab === "promotions" && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-50">
+            <div>
+              <h3 className="font-bold text-gray-900">
+                Mã giảm giá độc quyền của studio
+              </h3>
+              <p className="text-gray-500 text-xs mt-0.5">
+                Tạo các coupon code ưu đãi dành riêng cho dịch vụ của bạn.
+              </p>
+            </div>
+            <Button
+              onClick={handleOpenAddPromo}
+              className="bg-[#E4187D] hover:bg-[#c9126b] text-white rounded-full font-semibold cursor-pointer"
+            >
+              <PlusCircle className="w-4 h-4 mr-1.5" />
+              Tạo Coupon
+            </Button>
+          </div>
+
+          {promotions.length === 0 ? (
+            <div className="text-center py-20 bg-white rounded-2xl border border-gray-100 p-8 max-w-md mx-auto">
+              <Tag className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+              <h3 className="font-bold text-gray-800 text-lg mb-1">
+                Chưa có mã giảm giá nào
+              </h3>
+              <p className="text-gray-500 text-sm mb-4">
+                Tạo mã giảm giá để tăng cường chuyển đổi đặt lịch của khách
+                hàng.
+              </p>
+              <Button
+                onClick={handleOpenAddPromo}
+                className="bg-[#E4187D] hover:bg-[#c9126b] text-white rounded-full"
+              >
+                Tạo mã đầu tiên
+              </Button>
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+              <table className="w-full text-left text-sm border-collapse">
+                <thead className="bg-gray-50 text-gray-700 uppercase text-[11px] font-bold tracking-wider">
+                  <tr>
+                    <th className="p-4 border-b border-gray-100">Mã Code</th>
+                    <th className="p-4 border-b border-gray-100">
+                      Giá Trị Giảm
+                    </th>
+                    <th className="p-4 border-b border-gray-100">
+                      Đơn Tối Thiểu
+                    </th>
+                    <th className="p-4 border-b border-gray-100">Điểm Đổi</th>
+                    <th className="p-4 border-b border-gray-100">
+                      Hạn Sử Dụng
+                    </th>
+                    <th className="p-4 border-b border-gray-100 text-right">
+                      Thao Tác
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 text-gray-700 font-medium">
+                  {promotions.map((promo) => (
+                    <tr
+                      key={promo.id}
+                      className="hover:bg-gray-50/50 transition-colors"
+                    >
+                      <td className="p-4 font-mono font-bold text-pink-600 text-base">
+                        {promo.code}
+                      </td>
+                      <td className="p-4 text-[#E4187D] font-extrabold">
+                        {formatPrice(promo.discountValue)}
+                      </td>
+                      <td className="p-4">
+                        {formatPrice(promo.minOrderValue)}
+                      </td>
+                      <td className="p-4">
+                        <Badge variant="secondary">
+                          {promo.pointCharge || 0} điểm
+                        </Badge>
+                      </td>
+                      <td className="p-4 text-xs text-gray-500">
+                        {new Date(promo.expiryDate).toLocaleString("vi-VN")}
+                      </td>
+                      <td className="p-4 text-right">
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            onClick={() => handleOpenEditPromo(promo)}
+                            className="p-1.5 hover:bg-gray-50 border border-gray-100 rounded-lg text-gray-600 cursor-pointer"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeletePromo(promo.id)}
+                            className="p-1.5 hover:bg-red-50 border border-gray-100 rounded-lg text-red-600 hover:border-red-100 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* TAB 4: MY PROFILE (SO PROFILE) */}
       {activeTab === "profile" && (
         <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm space-y-6">
@@ -888,6 +1127,98 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
               </Button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* TAB 5: SERVICE OWNER REVIEWS */}
+      {activeTab === "reviews" && (
+        <div className="space-y-4">
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h3 className="font-bold text-gray-900 text-lg">
+                Danh Sách Nhận Xét & Đánh Giá
+              </h3>
+              <p className="text-gray-500 text-xs mt-0.5">
+                Phản hồi thực tế từ khách hàng đã trải nghiệm dịch vụ của
+                studio.
+              </p>
+            </div>
+            <div className="flex items-center bg-yellow-50 text-yellow-700 px-4 py-2.5 rounded-2xl border border-yellow-100 font-bold text-sm">
+              <Star className="w-4 h-4 fill-yellow-500 text-yellow-500 mr-1.5 shrink-0" />
+              <span>
+                {reviews.length > 0
+                  ? (
+                      reviews.reduce((acc, curr) => acc + curr.rating, 0) /
+                      reviews.length
+                    ).toFixed(1)
+                  : "0.0"}{" "}
+                / 5 ({reviews.length} đánh giá)
+              </span>
+            </div>
+          </div>
+
+          {reviews.length === 0 ? (
+            <div className="text-center py-20 bg-white rounded-2xl border border-gray-100 p-8 max-w-md mx-auto">
+              <MessageSquare className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+              <h3 className="font-bold text-gray-800 text-lg mb-1">
+                Chưa có đánh giá nào
+              </h3>
+              <p className="text-gray-500 text-sm">
+                Khi khách hàng hoàn tất dịch vụ và gửi đánh giá, kết quả sẽ hiển
+                thị ở đây.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {reviews.map((r) => (
+                <div
+                  key={r.id}
+                  className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-4 flex flex-col justify-between hover:shadow-md transition-shadow"
+                >
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-bold text-gray-900 text-base">
+                          {r.service}
+                        </h4>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          Khách hàng: {r.customer}
+                        </p>
+                      </div>
+                      <Badge
+                        className={
+                          r.status === "APPROVED"
+                            ? "bg-green-50 text-green-700 hover:bg-green-50 border-green-200"
+                            : r.status === "REJECTED"
+                              ? "bg-red-50 text-red-700 hover:bg-red-50 border-red-200"
+                              : "bg-yellow-50 text-yellow-700 hover:bg-yellow-50 border-yellow-200"
+                        }
+                      >
+                        {r.status === "APPROVED"
+                          ? "Đã Duyệt"
+                          : r.status === "REJECTED"
+                            ? "Đã Ẩn"
+                            : "Chờ Duyệt"}
+                      </Badge>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-xs">
+                      <div className="flex items-center text-yellow-500 font-bold">
+                        <Star className="w-3.5 h-3.5 fill-current mr-1" />
+                        <span>{r.rating} / 5</span>
+                      </div>
+                      <span className="text-gray-300">|</span>
+                      <span className="text-gray-400">📅 Ngày: {r.date}</span>
+                    </div>
+
+                    <p className="text-sm text-gray-600 italic bg-gray-50/50 p-4 rounded-2xl border border-gray-100/30 leading-relaxed font-normal">
+                      &quot;{r.comment}&quot;
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1091,7 +1422,117 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
         </div>
       )}
 
+      {/* PROMO MODAL */}
+      {promoModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-5 animate-scale-up">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+              <h2 className="text-xl font-bold text-gray-900">
+                {editingPromo ? "Chỉnh Sửa Coupon" : "Tạo Mã Coupon Mới"}
+              </h2>
+              <button
+                onClick={() => setPromoModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 font-bold text-xl cursor-pointer"
+              >
+                &times;
+              </button>
+            </div>
 
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  Mã giảm giá (Code)
+                </label>
+                <Input
+                  placeholder="VD: SUMMERSALE20, BRIDE50..."
+                  value={promoCode}
+                  onChange={(e) => setPromoCode(e.target.value)}
+                  disabled={!!editingPromo}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    Số tiền giảm (VND)
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={promoDiscount}
+                    onChange={(e) =>
+                      setPromoDiscount(parseFloat(e.target.value) || 0)
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    Đơn hàng tối thiểu (VND)
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={promoMinOrder}
+                    onChange={(e) =>
+                      setPromoMinOrder(parseFloat(e.target.value) || 0)
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    Điểm tích lũy để đổi
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={promoPointCharge}
+                    onChange={(e) =>
+                      setPromoPointCharge(parseInt(e.target.value) || 0)
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    Hạn sử dụng
+                  </label>
+                  <Input
+                    type="datetime-local"
+                    value={promoExpiry}
+                    onChange={(e) => setPromoExpiry(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end pt-3 border-t border-gray-100">
+              <Button
+                variant="outline"
+                className="rounded-full px-6"
+                onClick={() => setPromoModalOpen(false)}
+              >
+                Hủy bỏ
+              </Button>
+              <Button
+                onClick={handleSavePromo}
+                disabled={savingPromo}
+                className="bg-[#E4187D] hover:bg-[#c9126b] text-white rounded-full px-8 font-semibold cursor-pointer"
+              >
+                {savingPromo ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
+                    Đang lưu...
+                  </>
+                ) : (
+                  "Lưu Mã"
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* BOOKING DETAIL MODAL */}
       {selectedDetailBooking && (

@@ -28,22 +28,32 @@ import {
   getAllUsers,
   updateUserStatus,
   updateUserRole,
+  getMyBookings,
+  updateBookingStatus,
   getPromotions,
   createPromotion,
   updatePromotion,
   deletePromotion,
+  getAllFavouritesAdmin,
+  deleteFavouriteAdmin,
+  FavouriteAdminDto,
   getAllReviews,
   updateReviewStatus,
   deleteReview,
 } from "@/lib/api";
 
 import { UserDto } from "@/types/user";
+import { BookingDto, BookingStatus } from "@/types/booking";
 import { PromotionDto } from "@/types/promotion";
 import { ReviewDto } from "@/types/review";
 
 type AdminTab =
+  | "stats"
+  | "orderStats"
   | "users"
+  | "bookings"
   | "promotions"
+  | "favorites"
   | "reviews";
 
 const tabButtonClass = (active: boolean) =>
@@ -54,13 +64,22 @@ const tabButtonClass = (active: boolean) =>
   }`;
 
 export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<AdminTab>("users");
+  const [activeTab, setActiveTab] = useState<AdminTab>("stats");
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [loadingBookings, setLoadingBookings] = useState(false);
   const [loadingPromotions, setLoadingPromotions] = useState(false);
 
   const [users, setUsers] = useState<UserDto[]>([]);
+  const [bookings, setBookings] = useState<BookingDto[]>([]);
   const [promotions, setPromotions] = useState<PromotionDto[]>([]);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+  const [updatingBookingId, setUpdatingBookingId] = useState<string | null>(
+    null,
+  );
+
+  const [loadingFavorites, setLoadingFavorites] = useState(false);
+  const [favorites, setFavorites] = useState<FavouriteAdminDto[]>([]);
+  const [favoriteSearchQuery, setFavoriteSearchQuery] = useState("");
 
   const [loadingReviews, setLoadingReviews] = useState(false);
   const [reviews, setReviews] = useState<ReviewDto[]>([]);
@@ -78,7 +97,9 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     fetchUsers();
+    fetchBookings();
     fetchPromotionsList();
+    fetchFavorites();
     fetchReviewsList();
   }, []);
 
@@ -106,6 +127,18 @@ export default function AdminDashboard() {
     }
   };
 
+  const fetchBookings = async () => {
+    setLoadingBookings(true);
+    try {
+      const list = await getMyBookings();
+      setBookings(list);
+    } catch {
+      toast.error("Không thể tải danh sách đơn hàng");
+    } finally {
+      setLoadingBookings(false);
+    }
+  };
+
   const fetchPromotionsList = async () => {
     setLoadingPromotions(true);
     try {
@@ -115,6 +148,29 @@ export default function AdminDashboard() {
       toast.error("Không thể tải danh sách khuyến mãi");
     } finally {
       setLoadingPromotions(false);
+    }
+  };
+
+  const fetchFavorites = async () => {
+    setLoadingFavorites(true);
+    try {
+      const list = await getAllFavouritesAdmin();
+      setFavorites(list || []);
+    } catch {
+      toast.error("Không thể tải danh sách dịch vụ yêu thích");
+    } finally {
+      setLoadingFavorites(false);
+    }
+  };
+
+  const handleDeleteFavorite = async (id: number) => {
+    if (!confirm("Bạn có chắc chắn muốn xóa liên kết yêu thích này?")) return;
+    try {
+      await deleteFavouriteAdmin(id);
+      toast.success("Xóa liên kết yêu thích thành công!");
+      fetchFavorites();
+    } catch (e: any) {
+      toast.error(getErrorMessage(e, "Không thể xóa liên kết yêu thích"));
     }
   };
 
@@ -262,11 +318,39 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleUpdateBookingStatus = async (
+    bookingId: string,
+    status: BookingStatus,
+  ) => {
+    setUpdatingBookingId(bookingId);
+    try {
+      await updateBookingStatus(bookingId, status);
+      toast.success(`Cập nhật trạng thái đơn hàng thành: ${status}`);
+      fetchBookings();
+    } catch (e: any) {
+      toast.error(getErrorMessage(e, "Không thể cập nhật trạng thái"));
+    } finally {
+      setUpdatingBookingId(null);
+    }
+  };
+
   const formatPrice = (p: number) =>
     new Intl.NumberFormat("vi-VN", {
       style: "currency",
       currency: "VND",
     }).format(p);
+
+  const filteredFavorites = useMemo(() => {
+    return favorites.filter(fav => {
+      const query = favoriteSearchQuery.toLowerCase();
+      return (
+        (fav.customerName || "").toLowerCase().includes(query) ||
+        (fav.customerEmail || "").toLowerCase().includes(query) ||
+        (fav.serviceName || "").toLowerCase().includes(query) ||
+        (fav.artistName || "").toLowerCase().includes(query)
+      );
+    });
+  }, [favorites, favoriteSearchQuery]);
 
   const filteredReviews = useMemo(() => {
     return reviews.filter(rev => {
@@ -282,15 +366,110 @@ export default function AdminDashboard() {
     });
   }, [reviews, reviewSearchQuery, reviewStatusFilter]);
 
+  const bookingStatusLabel = (status: BookingStatus) => {
+    switch (status) {
+      case "PENDING":
+        return "Chờ Xác Nhận";
+      case "CONFIRMED":
+        return "Đã Xác Nhận";
+      case "COMPLETED":
+        return "Đã Hoàn Thành";
+      case "CANCELLED":
+        return "Đã Hủy";
+    }
+  };
+
+  const bookingStatusBadgeClass = (status: BookingStatus) => {
+    switch (status) {
+      case "CONFIRMED":
+        return "bg-green-100 text-green-700 hover:bg-green-100 border-none";
+      case "COMPLETED":
+        return "bg-blue-100 text-blue-700 hover:bg-blue-100 border-none";
+      case "CANCELLED":
+        return "bg-red-100 text-red-700 hover:bg-red-100 border-none";
+      default:
+        return "bg-yellow-100 text-yellow-700 hover:bg-yellow-100 border-none";
+    }
+  };
+
+  const orderStats = useMemo(() => {
+    const statusCounts: Record<BookingStatus, number> = {
+      PENDING: 0,
+      CONFIRMED: 0,
+      COMPLETED: 0,
+      CANCELLED: 0,
+    };
+    const serviceMap = new Map<string, { name: string; count: number }>();
+    const customerMap = new Map<string, { name: string; count: number }>();
+
+    for (const booking of bookings) {
+      statusCounts[booking.status]++;
+      const service = serviceMap.get(booking.serviceId) ?? {
+        name: booking.serviceName,
+        count: 0,
+      };
+      service.count += 1;
+      serviceMap.set(booking.serviceId, service);
+
+      const customer = customerMap.get(booking.customerId) ?? {
+        name: booking.customerDisplayName || "Khách hàng",
+        count: 0,
+      };
+      customer.count += 1;
+      customerMap.set(booking.customerId, customer);
+    }
+
+    const topServices = [...serviceMap.values()]
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+    const topCustomers = [...customerMap.values()]
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    return {
+      total: bookings.length,
+      statusCounts,
+      uniqueCustomers: customerMap.size,
+      topServices,
+      topCustomers,
+      completionRate:
+        bookings.length > 0
+          ? Math.round((statusCounts.COMPLETED / bookings.length) * 100)
+          : 0,
+      cancellationRate:
+        bookings.length > 0
+          ? Math.round((statusCounts.CANCELLED / bookings.length) * 100)
+          : 0,
+    };
+  }, [bookings]);
+
   return (
     <div className="space-y-6">
       {/* Sub Tabs */}
       <div className="flex flex-wrap gap-4 border-b border-gray-100 pb-2">
         <button
+          onClick={() => setActiveTab("stats")}
+          className={tabButtonClass(activeTab === "stats")}
+        >
+          Thống Kê Doanh Thu
+        </button>
+        <button
+          onClick={() => setActiveTab("orderStats")}
+          className={tabButtonClass(activeTab === "orderStats")}
+        >
+          Thống Kê Đơn Hàng ({bookings.length})
+        </button>
+        <button
           onClick={() => setActiveTab("users")}
           className={tabButtonClass(activeTab === "users")}
         >
           Quản Lý Người Dùng ({users.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("bookings")}
+          className={tabButtonClass(activeTab === "bookings")}
+        >
+          Quản Lý Đơn Hàng ({bookings.length})
         </button>
         <button
           onClick={() => setActiveTab("promotions")}
@@ -299,12 +478,348 @@ export default function AdminDashboard() {
           Mã Khuyến Mãi ({promotions.length})
         </button>
         <button
+          onClick={() => setActiveTab("favorites")}
+          className={tabButtonClass(activeTab === "favorites")}
+        >
+          Quản Lý Dịch Vụ Ưu Thích
+        </button>
+        <button
           onClick={() => setActiveTab("reviews")}
           className={tabButtonClass(activeTab === "reviews")}
         >
-          Đánh Giá ({reviews.length})
+          Đánh Giá
         </button>
       </div>
+
+      {/* TAB: REVENUE STATS (placeholder) */}
+      {activeTab === "stats" && null}
+
+      {/* TAB: ORDER STATS */}
+      {activeTab === "orderStats" && (
+        <div className="space-y-4">
+          {loadingBookings ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-[#E4187D] mb-2" />
+              <p className="text-gray-400 text-sm">
+                Đang tải thống kê đơn hàng...
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-50">
+                <h3 className="font-bold text-gray-900">
+                  Tổng quan đơn hàng toàn hệ thống
+                </h3>
+                <p className="text-gray-500 text-xs mt-0.5">
+                  Thống kê tổng hợp từ bảng bookings — cập nhật theo dữ liệu
+                  thực tế.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                  <div className="flex items-center gap-2 text-gray-500 text-xs font-semibold uppercase mb-2">
+                    <Package className="w-4 h-4 text-[#E4187D]" />
+                    Tổng đơn
+                  </div>
+                  <p className="text-2xl font-extrabold text-gray-900">
+                    {orderStats.total}
+                  </p>
+                </div>
+                <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                  <div className="flex items-center gap-2 text-gray-500 text-xs font-semibold uppercase mb-2">
+                    <Clock className="w-4 h-4 text-yellow-500" />
+                    Chờ xác nhận
+                  </div>
+                  <p className="text-2xl font-extrabold text-yellow-600">
+                    {orderStats.statusCounts.PENDING}
+                  </p>
+                </div>
+                <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                  <div className="flex items-center gap-2 text-gray-500 text-xs font-semibold uppercase mb-2">
+                    <Check className="w-4 h-4 text-green-500" />
+                    Đã xác nhận
+                  </div>
+                  <p className="text-2xl font-extrabold text-green-600">
+                    {orderStats.statusCounts.CONFIRMED}
+                  </p>
+                </div>
+                <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                  <div className="flex items-center gap-2 text-gray-500 text-xs font-semibold uppercase mb-2">
+                    <CheckCircle className="w-4 h-4 text-blue-500" />
+                    Hoàn thành
+                  </div>
+                  <p className="text-2xl font-extrabold text-blue-600">
+                    {orderStats.statusCounts.COMPLETED}
+                  </p>
+                </div>
+                <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                  <div className="flex items-center gap-2 text-gray-500 text-xs font-semibold uppercase mb-2">
+                    <XCircle className="w-4 h-4 text-red-500" />
+                    Đã hủy
+                  </div>
+                  <p className="text-2xl font-extrabold text-red-600">
+                    {orderStats.statusCounts.CANCELLED}
+                  </p>
+                </div>
+                <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                  <div className="flex items-center gap-2 text-gray-500 text-xs font-semibold uppercase mb-2">
+                    <Users className="w-4 h-4 text-[#E4187D]" />
+                    Khách hàng
+                  </div>
+                  <p className="text-2xl font-extrabold text-gray-900">
+                    {orderStats.uniqueCustomers}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-[#E4187D]" />
+                    <h4 className="font-bold text-gray-900">
+                      Phân bổ trạng thái đơn hàng
+                    </h4>
+                  </div>
+                  {orderStats.total === 0 ? (
+                    <p className="text-sm text-gray-400">
+                      Chưa có dữ liệu đơn hàng.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {(
+                        [
+                          ["PENDING", "Chờ xác nhận", "bg-yellow-400"],
+                          ["CONFIRMED", "Đã xác nhận", "bg-green-500"],
+                          ["COMPLETED", "Hoàn thành", "bg-blue-500"],
+                          ["CANCELLED", "Đã hủy", "bg-red-500"],
+                        ] as const
+                      ).map(([status, label, barClass]) => {
+                        const count = orderStats.statusCounts[status];
+                        const percent = Math.round(
+                          (count / orderStats.total) * 100,
+                        );
+                        return (
+                          <div key={status} className="space-y-1">
+                            <div className="flex justify-between text-xs font-medium text-gray-600">
+                              <span>{label}</span>
+                              <span>
+                                {count} ({percent}%)
+                              </span>
+                            </div>
+                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${barClass}`}
+                                style={{ width: `${percent}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="pt-2 border-t border-gray-50 grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-gray-400 text-xs">Tỷ lệ hoàn thành</p>
+                      <p className="font-bold text-blue-600">
+                        {orderStats.completionRate}%
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-400 text-xs">Tỷ lệ hủy</p>
+                      <p className="font-bold text-red-600">
+                        {orderStats.cancellationRate}%
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+                  <h4 className="font-bold text-gray-900">
+                    Dịch vụ được đặt nhiều nhất
+                  </h4>
+                  {orderStats.topServices.length === 0 ? (
+                    <p className="text-sm text-gray-400">
+                      Chưa có dữ liệu dịch vụ.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {orderStats.topServices.map((svc, index) => (
+                        <div
+                          key={svc.name}
+                          className="flex items-center justify-between p-3 rounded-xl bg-gray-50/80"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className="w-6 h-6 rounded-full bg-[#E4187D]/10 text-[#E4187D] text-xs font-bold flex items-center justify-center shrink-0">
+                              {index + 1}
+                            </span>
+                            <span className="text-sm font-medium text-gray-800 truncate">
+                              {svc.name}
+                            </span>
+                          </div>
+                          <Badge className="bg-white text-gray-700 border border-gray-200 hover:bg-white shrink-0">
+                            {svc.count} đơn
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+                <h4 className="font-bold text-gray-900">
+                  Khách hàng đặt nhiều nhất
+                </h4>
+                {orderStats.topCustomers.length === 0 ? (
+                  <p className="text-sm text-gray-400">
+                    Chưa có dữ liệu khách hàng.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm border-collapse">
+                      <thead className="bg-gray-50 text-gray-700 uppercase text-[11px] font-bold tracking-wider">
+                        <tr>
+                          <th className="p-3 border-b border-gray-100">#</th>
+                          <th className="p-3 border-b border-gray-100">
+                            Khách hàng
+                          </th>
+                          <th className="p-3 border-b border-gray-100 text-right">
+                            Số đơn
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 text-gray-700">
+                        {orderStats.topCustomers.map((customer, index) => (
+                          <tr key={customer.name + index}>
+                            <td className="p-3 text-gray-400">{index + 1}</td>
+                            <td className="p-3 font-medium text-gray-900">
+                              {customer.name}
+                            </td>
+                            <td className="p-3 text-right font-bold text-[#E4187D]">
+                              {customer.count}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* TAB: FAVORITE SERVICES MANAGEMENT */}
+      {activeTab === "favorites" && (
+        <div className="space-y-4">
+          {loadingFavorites ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-[#E4187D] mb-2" />
+              <p className="text-gray-400 text-sm">
+                Đang tải danh sách dịch vụ yêu thích...
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <h3 className="font-bold text-gray-900">
+                    Quản lý dịch vụ yêu thích ({favorites.length})
+                  </h3>
+                  <p className="text-gray-500 text-xs mt-0.5">
+                    Theo dõi và xóa các liên kết dịch vụ yêu thích của người dùng trên hệ thống.
+                  </p>
+                </div>
+                {/* Search Box */}
+                <div className="relative w-full sm:w-72">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </span>
+                  <Input
+                    placeholder="Tìm khách hàng, email, dịch vụ..."
+                    className="pl-9 rounded-full text-xs"
+                    value={favoriteSearchQuery}
+                    onChange={(e) => setFavoriteSearchQuery(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {filteredFavorites.length === 0 ? (
+                <div className="text-center py-20 bg-white rounded-2xl border border-gray-100 p-8 max-w-md mx-auto">
+                  <svg className="w-12 h-12 text-gray-200 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                  </svg>
+                  <h3 className="font-bold text-gray-800 text-lg mb-1">
+                    Không tìm thấy kết quả nào
+                  </h3>
+                  <p className="text-gray-500 text-sm">
+                    {favorites.length === 0 
+                      ? "Chưa có người dùng nào thêm dịch vụ vào danh sách yêu thích." 
+                      : "Không có liên kết yêu thích nào khớp với từ khóa tìm kiếm."}
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead className="bg-gray-50 text-gray-700 uppercase text-[11px] font-bold tracking-wider">
+                      <tr>
+                        <th className="p-4 border-b border-gray-100">Khách Hàng</th>
+                        <th className="p-4 border-b border-gray-100">Dịch Vụ Yêu Thích</th>
+                        <th className="p-4 border-b border-gray-100">Nghệ Sĩ / Studio</th>
+                        <th className="p-4 border-b border-gray-100 text-right">Hành Động</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-gray-700 font-medium">
+                      {filteredFavorites.map((fav) => (
+                        <tr
+                          key={fav.id}
+                          className="hover:bg-gray-50/50 transition-colors"
+                        >
+                          <td className="p-4">
+                            <div className="font-bold text-gray-900">
+                              {fav.customerName}
+                            </div>
+                            <div className="text-[11px] text-gray-400 font-normal mt-0.5">
+                              {fav.customerEmail}
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <div className="font-bold text-[#E4187D]">
+                              {fav.serviceName}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-0.5">
+                              Giá: {formatPrice(fav.servicePrice)}
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <span className="bg-pink-50 text-pink-700 px-2.5 py-1 rounded-full text-xs font-semibold">
+                              {fav.artistName}
+                            </span>
+                          </td>
+                          <td className="p-4 text-right">
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDeleteFavorite(fav.id)}
+                              className="text-xs rounded-full cursor-pointer flex items-center gap-1 ml-auto"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> Xóa
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {/* TAB: REVIEWS MANAGEMENT */}
       {activeTab === "reviews" && (
@@ -623,6 +1138,168 @@ export default function AdminDashboard() {
                   </tbody>
                 </table>
               </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* TAB: ORDER MANAGEMENT */}
+      {activeTab === "bookings" && (
+        <div className="space-y-4">
+          {loadingBookings ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-[#E4187D] mb-2" />
+              <p className="text-gray-400 text-sm">
+                Đang tải danh sách đơn hàng...
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-50">
+                <h3 className="font-bold text-gray-900">
+                  Danh sách đơn hàng toàn hệ thống ({bookings.length})
+                </h3>
+                <p className="text-gray-500 text-xs mt-0.5">
+                  Theo dõi và quản lý tất cả các đơn đặt lịch trên nền tảng.
+                </p>
+              </div>
+
+              {bookings.length === 0 ? (
+                <div className="text-center py-20 bg-white rounded-2xl border border-gray-100 p-8 max-w-md mx-auto">
+                  <Calendar className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+                  <h3 className="font-bold text-gray-800 text-lg mb-1">
+                    Chưa có đơn hàng nào
+                  </h3>
+                  <p className="text-gray-500 text-sm">
+                    Các đơn đặt lịch từ khách hàng sẽ hiển thị tại đây.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {bookings.map((booking) => (
+                    <div
+                      key={booking.id}
+                      className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-gray-900 text-lg">
+                            {booking.serviceName}
+                          </span>
+                          <Badge
+                            className={bookingStatusBadgeClass(booking.status)}
+                          >
+                            {bookingStatusLabel(booking.status)}
+                          </Badge>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-500">
+                          <p>
+                            Khách:{" "}
+                            <span className="font-medium text-gray-700">
+                              {booking.customerDisplayName || "Chưa cập nhật"}
+                            </span>
+                          </p>
+                          <p>
+                            Artist:{" "}
+                            <span className="font-medium text-gray-700">
+                              {booking.artistName}
+                            </span>
+                          </p>
+                          <p>
+                            ⏱ Khung giờ: {booking.startTime.slice(0, 5)} -{" "}
+                            {booking.endTime.slice(0, 5)}
+                          </p>
+                          <p>
+                            📅 Ngày hẹn:{" "}
+                            {booking.bookingDate.split("-").reverse().join("/")}
+                          </p>
+                        </div>
+                        <div className="flex gap-4 text-xs text-gray-400">
+                          <p>
+                            Tổng tiền:{" "}
+                            <span className="font-semibold text-gray-700">
+                              {formatPrice(booking.totalAmount)}
+                            </span>
+                          </p>
+                          <p>
+                            Khách đã cọc:{" "}
+                            <span className="font-semibold text-pink-600">
+                              {formatPrice(booking.depositAmount)}
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 flex-wrap w-full md:w-auto self-end md:self-center shrink-0">
+                        {updatingBookingId === booking.id ? (
+                          <div className="flex items-center gap-1.5 text-gray-400 text-xs font-semibold py-2">
+                            <Loader2 className="w-4 h-4 animate-spin text-[#E4187D]" />
+                            Đang lưu...
+                          </div>
+                        ) : (
+                          <>
+                            {booking.status === "PENDING" && (
+                              <>
+                                <Button
+                                  onClick={() =>
+                                    handleUpdateBookingStatus(
+                                      booking.id,
+                                      "CONFIRMED",
+                                    )
+                                  }
+                                  className="bg-green-600 hover:bg-green-700 text-white rounded-full text-xs font-bold px-4 py-2 cursor-pointer flex items-center gap-1"
+                                >
+                                  <Check className="w-3.5 h-3.5" /> Xác Nhận
+                                </Button>
+                                <Button
+                                  onClick={() =>
+                                    handleUpdateBookingStatus(
+                                      booking.id,
+                                      "CANCELLED",
+                                    )
+                                  }
+                                  variant="outline"
+                                  className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 rounded-full text-xs font-bold px-4 py-2 cursor-pointer flex items-center gap-1"
+                                >
+                                  <X className="w-3.5 h-3.5" /> Hủy
+                                </Button>
+                              </>
+                            )}
+                            {booking.status === "CONFIRMED" && (
+                              <>
+                                <Button
+                                  onClick={() =>
+                                    handleUpdateBookingStatus(
+                                      booking.id,
+                                      "COMPLETED",
+                                    )
+                                  }
+                                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-bold px-4 py-2 cursor-pointer flex items-center gap-1"
+                                >
+                                  <CheckCircle className="w-3.5 h-3.5" /> Hoàn
+                                  Thành
+                                </Button>
+                                <Button
+                                  onClick={() =>
+                                    handleUpdateBookingStatus(
+                                      booking.id,
+                                      "CANCELLED",
+                                    )
+                                  }
+                                  variant="outline"
+                                  className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 rounded-full text-xs font-bold px-4 py-2 cursor-pointer flex items-center gap-1"
+                                >
+                                  <X className="w-3.5 h-3.5" /> Hủy
+                                </Button>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
           )}
         </div>
