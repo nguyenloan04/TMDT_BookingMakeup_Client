@@ -67,7 +67,7 @@ export default function PaymentResultPage({ params }: { params: Promise<{ status
                             Về trang chủ
                         </Button>
                         <Button
-                            onClick={() => router.push("/")}    //TODO: Add true api here to user booking management page
+                            onClick={() => router.push("/dashboard?tab=bookings")}
                             className="flex-1 bg-[#E4187D] hover:bg-[#c9126b] text-white rounded-full py-6 font-bold transition-colors"
                         >
                             Xem lịch đặt

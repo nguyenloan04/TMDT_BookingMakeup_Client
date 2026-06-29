@@ -18,7 +18,9 @@ import {
   AlertCircle, 
   CheckCircle2, 
   Loader2, 
-  MessageSquare 
+  MessageSquare,
+  CreditCard,
+  XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,10 +36,11 @@ import {
   getProfile,
   updateProfile,
 } from "@/lib/api";
-import { createBooking, getMyBookings } from "@/lib/api/booking";
+import { createBooking, getMyBookings, updateBookingStatus } from "@/lib/api/booking";
 import { validatePromotion } from "@/lib/api/promotions";
 import { createReview, getReviewsByService } from "@/lib/api/reviews";
 import { uploadAvatarImage } from "@/services/upload-service";
+import { generatePaymentUrl } from "@/services/payment-service";
 
 import { ServiceDto } from "@/types/service";
 import { BookingDto } from "@/types/booking";
@@ -81,6 +84,7 @@ export default function CustomerDashboard() {
   } | null>(null);
   const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [submittingBooking, setSubmittingBooking] = useState(false);
+  const [processingBookingId, setProcessingBookingId] = useState<string | null>(null);
   const [serviceReviews, setServiceReviews] = useState<ReviewDto[]>([]);
   const [loadingReviews, setLoadingReviews] = useState(false);
 
@@ -95,6 +99,10 @@ export default function CustomerDashboard() {
 
   useEffect(() => {
     fetchInitialData();
+
+    if (new URLSearchParams(window.location.search).get("tab") === "bookings") {
+      setActiveTab("bookings");
+    }
   }, []);
 
   const fetchInitialData = async () => {
@@ -265,6 +273,7 @@ export default function CustomerDashboard() {
       });
       toast.success("Đặt lịch thành công! Chờ Service Owner xác nhận.");
       setBookingModalOpen(false);
+      setActiveTab("bookings");
       // Reload bookings
       const bookingList = await getMyBookings();
       setBookings(bookingList);
@@ -304,6 +313,51 @@ export default function CustomerDashboard() {
       toast.error(getErrorMessage(e, "Không thể gửi đánh giá"));
     } finally {
       setSubmittingReview(false);
+    }
+  };
+
+  const handleCancelBooking = async (booking: BookingDto) => {
+    setProcessingBookingId(booking.id);
+    try {
+      await updateBookingStatus(booking.id, "CANCELLED");
+      toast.success("Đã hủy dịch vụ.");
+      const bookingList = await getMyBookings();
+      setBookings(bookingList);
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Không thể hủy dịch vụ"));
+    } finally {
+      setProcessingBookingId(null);
+    }
+  };
+
+  const handlePayBooking = async (booking: BookingDto) => {
+    setProcessingBookingId(booking.id);
+    try {
+      const payRes = await generatePaymentUrl(booking.id);
+
+      if (payRes.actionUrl && payRes.fields) {
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = payRes.actionUrl;
+
+        Object.entries(payRes.fields).forEach(([key, value]) => {
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = key;
+          input.value = value;
+          form.appendChild(input);
+        });
+
+        document.body.appendChild(form);
+        form.submit();
+        return;
+      }
+
+      toast.error("Không thể tạo thông tin thanh toán.");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Không thể khởi tạo thanh toán"));
+    } finally {
+      setProcessingBookingId(null);
     }
   };
 
@@ -546,19 +600,24 @@ export default function CustomerDashboard() {
                           <Badge 
                             variant={
                               booking.status === "CONFIRMED" ? "default" : 
+                              booking.status === "PAID" ? "secondary" :
                               booking.status === "COMPLETED" ? "secondary" : 
-                              booking.status === "CANCELLED" ? "destructive" : "outline"
+                              booking.status === "CANCELLED" || booking.status === "REJECTED" ? "destructive" : "outline"
                             }
                             className={
                               booking.status === "CONFIRMED" ? "bg-green-100 text-green-700 hover:bg-green-100" :
+                              booking.status === "PAID" ? "bg-purple-100 text-purple-700 hover:bg-purple-100" :
                               booking.status === "COMPLETED" ? "bg-blue-100 text-blue-700 hover:bg-blue-100" :
                               booking.status === "CANCELLED" ? "bg-red-100 text-red-700 hover:bg-red-100" :
+                              booking.status === "REJECTED" ? "bg-red-100 text-red-700 hover:bg-red-100" :
                               "bg-yellow-100 text-yellow-700 hover:bg-yellow-100"
                             }
                           >
                             {booking.status === "PENDING" ? "Chờ Xác Nhận" :
                              booking.status === "CONFIRMED" ? "Đã Xác Nhận" :
-                             booking.status === "COMPLETED" ? "Đã Hoàn Thành" : "Đã Hủy"}
+                             booking.status === "PAID" ? "Đã Thanh Toán" :
+                             booking.status === "COMPLETED" ? "Đã Hoàn Thành" :
+                             booking.status === "REJECTED" ? "Đã Từ Chối" : "Đã Hủy"}
                           </Badge>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1 text-sm text-gray-500">
@@ -573,6 +632,34 @@ export default function CustomerDashboard() {
                       </div>
 
                       <div className="flex gap-2 w-full md:w-auto self-end md:self-center shrink-0">
+                        {processingBookingId === booking.id ? (
+                          <div className="flex items-center gap-1.5 text-gray-400 text-xs font-semibold py-2 px-3">
+                            <Loader2 className="w-4 h-4 animate-spin text-[#E4187D]" />
+                            Đang xử lý...
+                          </div>
+                        ) : (
+                          <>
+                            {booking.status === "CONFIRMED" && (
+                              <Button
+                                onClick={() => handlePayBooking(booking)}
+                                className="bg-[#E4187D] hover:bg-[#c9126b] text-white rounded-full font-semibold text-xs py-2 w-full md:w-auto cursor-pointer"
+                              >
+                                <CreditCard className="w-4 h-4 mr-1.5" />
+                                Thanh Toán
+                              </Button>
+                            )}
+                            {(booking.status === "PENDING" || booking.status === "CONFIRMED") && (
+                              <Button
+                                variant="outline"
+                                onClick={() => handleCancelBooking(booking)}
+                                className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 rounded-full font-semibold text-xs py-2 w-full md:w-auto cursor-pointer"
+                              >
+                                <XCircle className="w-4 h-4 mr-1.5" />
+                                Hủy Dịch Vụ
+                              </Button>
+                            )}
+                          </>
+                        )}
                         {booking.status === "COMPLETED" && (
                           <Button
                             onClick={() => handleOpenReview(booking)}

@@ -21,7 +21,7 @@ export interface Booking {
   endTime: string;
   totalAmount: number;
   depositAmount: number;
-  status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
+  status: 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'PAID' | 'COMPLETED' | 'CANCELLED';
 }
 export interface FeaturedArtistDto {
     id: string;

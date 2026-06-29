@@ -412,14 +412,14 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
   const pendingBookingsCount = bookings.filter((b) => b.status === "PENDING").length;
   const completedBookingsCount = bookings.filter((b) => b.status === "COMPLETED").length;
   
-  // Revenue: Sum of totalAmount for CONFIRMED or COMPLETED bookings
+  // Revenue: Sum of totalAmount for paid or completed bookings
   const estimatedRevenue = bookings
-    .filter((b) => b.status === "CONFIRMED" || b.status === "COMPLETED")
+    .filter((b) => b.status === "PAID" || b.status === "COMPLETED")
     .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
 
-  // Deposits collected: Sum of depositAmount for CONFIRMED or COMPLETED bookings
+  // Deposits collected: Sum of depositAmount for paid or completed bookings
   const collectedDeposits = bookings
-    .filter((b) => b.status === "CONFIRMED" || b.status === "COMPLETED")
+    .filter((b) => b.status === "PAID" || b.status === "COMPLETED")
     .reduce((sum, b) => sum + (b.depositAmount || 0), 0);
 
   return (
@@ -687,7 +687,9 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
                 { value: "ALL", label: "Tất cả" },
                 { value: "PENDING", label: "Chờ xác nhận" },
                 { value: "CONFIRMED", label: "Đã xác nhận" },
+                { value: "PAID", label: "Đã thanh toán" },
                 { value: "COMPLETED", label: "Đã hoàn thành" },
+                { value: "REJECTED", label: "Đã từ chối" },
                 { value: "CANCELLED", label: "Đã hủy" },
               ].map((pill) => {
                 const isActive = bookingStatusFilter === pill.value;
@@ -752,10 +754,12 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
                   <div className={`absolute left-0 top-0 bottom-0 w-1.5 transition-colors ${
                     booking.status === "CONFIRMED"
                       ? "bg-green-500"
+                      : booking.status === "PAID"
+                        ? "bg-purple-500"
                       : booking.status === "COMPLETED"
                         ? "bg-blue-500"
-                        : booking.status === "CANCELLED"
-                          ? "bg-gray-300"
+                        : booking.status === "CANCELLED" || booking.status === "REJECTED"
+                          ? "bg-red-300"
                           : "bg-yellow-500"
                   }`} />
                   
@@ -772,20 +776,28 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
                         className={
                           booking.status === "CONFIRMED"
                             ? "bg-green-50 text-green-700 hover:bg-green-50 border-green-200 border"
+                            : booking.status === "PAID"
+                              ? "bg-purple-50 text-purple-700 hover:bg-purple-50 border-purple-200 border"
                             : booking.status === "COMPLETED"
                               ? "bg-blue-50 text-blue-700 hover:bg-blue-50 border-blue-200 border"
                               : booking.status === "CANCELLED"
                                 ? "bg-gray-50 text-gray-500 hover:bg-gray-50 border-gray-200 border"
-                                : "bg-yellow-50 text-yellow-750 hover:bg-yellow-50 border-yellow-250 border"
+                                : booking.status === "REJECTED"
+                                  ? "bg-red-50 text-red-700 hover:bg-red-50 border-red-200 border"
+                                  : "bg-yellow-50 text-yellow-750 hover:bg-yellow-50 border-yellow-250 border"
                         }
                       >
                         {booking.status === "PENDING"
                           ? "Chờ Xác Nhận"
                           : booking.status === "CONFIRMED"
                             ? "Đã Xác Nhận"
-                            : booking.status === "COMPLETED"
-                              ? "Đã Hoàn Thành"
-                              : "Đã Hủy"}
+                            : booking.status === "PAID"
+                              ? "Đã Thanh Toán"
+                              : booking.status === "COMPLETED"
+                                ? "Đã Hoàn Thành"
+                                : booking.status === "REJECTED"
+                                  ? "Đã Từ Chối"
+                                  : "Đã Hủy"}
                       </Badge>
                     </div>
 
@@ -864,7 +876,7 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
                                 onClick={() =>
                                   handleUpdateBookingStatus(
                                     booking.id,
-                                    "CANCELLED",
+                                    "REJECTED",
                                   )
                                 }
                                 variant="outline"
@@ -874,7 +886,7 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
                               </Button>
                             </>
                           )}
-                          {booking.status === "CONFIRMED" && (
+                          {booking.status === "PAID" && (
                             <>
                               <Button
                                 onClick={() =>
@@ -886,18 +898,6 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
                                 className="bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-bold px-4 py-1.5 cursor-pointer flex items-center gap-1 shadow-sm transition-colors"
                               >
                                 <CheckCircle className="w-3.5 h-3.5" /> Hoàn Thành
-                              </Button>
-                              <Button
-                                onClick={() =>
-                                  handleUpdateBookingStatus(
-                                    booking.id,
-                                    "CANCELLED",
-                                  )
-                                }
-                                variant="outline"
-                                className="border-red-200 text-red-650 hover:bg-red-50 hover:text-red-750 rounded-full text-xs font-bold px-4 py-1.5 cursor-pointer flex items-center gap-1 transition-colors"
-                              >
-                                <X className="w-3.5 h-3.5" /> Hủy Lịch
                               </Button>
                             </>
                           )}
@@ -1585,20 +1585,28 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
                     className={
                       selectedDetailBooking.status === "CONFIRMED"
                         ? "bg-green-100 text-green-700 hover:bg-green-100 border-none font-bold"
+                        : selectedDetailBooking.status === "PAID"
+                          ? "bg-purple-100 text-purple-700 hover:bg-purple-100 border-none font-bold"
                         : selectedDetailBooking.status === "COMPLETED"
                           ? "bg-blue-100 text-blue-700 hover:bg-blue-100 border-none font-bold"
                           : selectedDetailBooking.status === "CANCELLED"
                             ? "bg-red-100 text-red-700 hover:bg-red-100 border-none font-bold"
-                            : "bg-yellow-100 text-yellow-700 hover:bg-yellow-100 border-none font-bold"
+                            : selectedDetailBooking.status === "REJECTED"
+                              ? "bg-red-100 text-red-700 hover:bg-red-100 border-none font-bold"
+                              : "bg-yellow-100 text-yellow-700 hover:bg-yellow-100 border-none font-bold"
                     }
                   >
                     {selectedDetailBooking.status === "PENDING"
                       ? "Chờ Xác Nhận"
                       : selectedDetailBooking.status === "CONFIRMED"
                         ? "Đã Xác Nhận"
-                        : selectedDetailBooking.status === "COMPLETED"
-                          ? "Đã Hoàn Thành"
-                          : "Đã Hủy"}
+                        : selectedDetailBooking.status === "PAID"
+                          ? "Đã Thanh Toán"
+                          : selectedDetailBooking.status === "COMPLETED"
+                            ? "Đã Hoàn Thành"
+                            : selectedDetailBooking.status === "REJECTED"
+                              ? "Đã Từ Chối"
+                              : "Đã Hủy"}
                   </Badge>
                 </div>
                 
@@ -1711,8 +1719,8 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
                         </Button>
                         <Button
                           onClick={async () => {
-                            await handleUpdateBookingStatus(selectedDetailBooking.id, "CANCELLED");
-                            setSelectedDetailBooking(prev => prev ? { ...prev, status: "CANCELLED" } : null);
+                            await handleUpdateBookingStatus(selectedDetailBooking.id, "REJECTED");
+                            setSelectedDetailBooking(prev => prev ? { ...prev, status: "REJECTED" } : null);
                           }}
                           variant="outline"
                           className="border-red-200 text-red-650 hover:bg-red-50 hover:text-red-750 rounded-full font-bold text-xs px-4 cursor-pointer flex items-center gap-1"
@@ -1721,7 +1729,7 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
                         </Button>
                       </>
                     )}
-                    {selectedDetailBooking.status === "CONFIRMED" && (
+                    {selectedDetailBooking.status === "PAID" && (
                       <>
                         <Button
                           onClick={async () => {
@@ -1731,16 +1739,6 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
                           className="bg-blue-600 hover:bg-blue-700 text-white rounded-full font-bold text-xs px-4 cursor-pointer flex items-center gap-1"
                         >
                           <CheckCircle className="w-3.5 h-3.5" /> Hoàn Thành
-                        </Button>
-                        <Button
-                          onClick={async () => {
-                            await handleUpdateBookingStatus(selectedDetailBooking.id, "CANCELLED");
-                            setSelectedDetailBooking(prev => prev ? { ...prev, status: "CANCELLED" } : null);
-                          }}
-                          variant="outline"
-                          className="border-red-200 text-red-655 hover:bg-red-50 hover:text-red-700 rounded-full font-bold text-xs px-4 cursor-pointer flex items-center gap-1"
-                        >
-                          <X className="w-3.5 h-3.5" /> Hủy Lịch
                         </Button>
                       </>
                     )}

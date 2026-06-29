@@ -252,7 +252,7 @@ export default function BookingPage() {
       setSuccessMsg("Đặt lịch thành công! Đang chuyển về trang thông tin của bạn...");
 
       setTimeout(() => {
-        router.push("/dashboard");
+        router.push("/dashboard?tab=bookings");
       }, 2000);
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: string | { message?: string } } })?.response?.data;

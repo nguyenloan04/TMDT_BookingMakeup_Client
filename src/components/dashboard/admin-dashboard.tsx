@@ -347,9 +347,13 @@ export default function AdminDashboard() {
     switch (status) {
       case "CONFIRMED":
         return "bg-green-100 text-green-700 hover:bg-green-100 border-none";
+      case "PAID":
+        return "bg-purple-100 text-purple-700 hover:bg-purple-100 border-none";
       case "COMPLETED":
         return "bg-blue-100 text-blue-700 hover:bg-blue-100 border-none";
       case "CANCELLED":
+        return "bg-red-100 text-red-700 hover:bg-red-100 border-none";
+      case "REJECTED":
         return "bg-red-100 text-red-700 hover:bg-red-100 border-none";
       default:
         return "bg-yellow-100 text-yellow-700 hover:bg-yellow-100 border-none";
@@ -551,7 +555,9 @@ export default function AdminDashboard() {
                         [
                           ["PENDING", "Chờ xác nhận", "bg-yellow-400"],
                           ["CONFIRMED", "Đã xác nhận", "bg-green-500"],
+                          ["PAID", "Đã thanh toán", "bg-purple-500"],
                           ["COMPLETED", "Hoàn thành", "bg-blue-500"],
+                          ["REJECTED", "Đã từ chối", "bg-red-400"],
                           ["CANCELLED", "Đã hủy", "bg-red-500"],
                         ] as const
                       ).map(([status, label, barClass]) => {
@@ -1106,17 +1112,17 @@ export default function AdminDashboard() {
                                   onClick={() =>
                                     handleUpdateBookingStatus(
                                       booking.id,
-                                      "CANCELLED",
+                                      "REJECTED",
                                     )
                                   }
                                   variant="outline"
                                   className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 rounded-full text-xs font-bold px-4 py-2 cursor-pointer flex items-center gap-1"
                                 >
-                                  <X className="w-3.5 h-3.5" /> Hủy
+                                  <X className="w-3.5 h-3.5" /> Từ Chối
                                 </Button>
                               </>
                             )}
-                            {booking.status === "CONFIRMED" && (
+                            {booking.status === "PAID" && (
                               <>
                                 <Button
                                   onClick={() =>
@@ -1129,18 +1135,6 @@ export default function AdminDashboard() {
                                 >
                                   <CheckCircle className="w-3.5 h-3.5" /> Hoàn
                                   Thành
-                                </Button>
-                                <Button
-                                  onClick={() =>
-                                    handleUpdateBookingStatus(
-                                      booking.id,
-                                      "CANCELLED",
-                                    )
-                                  }
-                                  variant="outline"
-                                  className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 rounded-full text-xs font-bold px-4 py-2 cursor-pointer flex items-center gap-1"
-                                >
-                                  <X className="w-3.5 h-3.5" /> Hủy
                                 </Button>
                               </>
                             )}
