@@ -25,6 +25,14 @@ export const artistService = {
   createArtist: async (data: { artistName: string; specialization: string; portfolioImages: string }): Promise<Artist> => {
     const response = await apiClient.post('/artists', data);
     return response.data;
+  },
+  toggleFollow: async (artistId: string): Promise<void> => {
+    await apiClient.post(`/artists/${artistId}/follow`);
+  },
+
+  checkFollowStatus: async (artistId: string): Promise<boolean> => {
+    const response = await apiClient.get(`/artists/${artistId}/follow-status`);
+    return response.data;
   }
 };
 

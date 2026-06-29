@@ -6,6 +6,8 @@ export interface Artist {
   averageRating: number;
   reviewCount: number;
   followCount: number;
+  ownerId: string;
+  ownerName: string;
 }
 
 export interface Booking {
