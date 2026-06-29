@@ -2,12 +2,14 @@
 
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
-import { useEffect, Suspense, useSyncExternalStore } from "react";
+import { useEffect, Suspense, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getDashboardRole, getDashboardRoleLabel } from "@/lib/dashboard-role";
+import { getProfile, getServiceOwnerProfile } from "@/lib/api/users";
+import { AuthDto } from "@/types/auth";
 import {
   Palette,
   Home,
@@ -25,8 +27,9 @@ const logoFont = Playwrite_US_Trad({
 const emptySubscribe = () => () => { };
 
 function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
-  const { user, logout, isLoading: authLoading } = useAuth();
+  const { user, logout, updateUser, isLoading: authLoading } = useAuth();
   const router = useRouter();
+  const [isRoleRefreshing, setIsRoleRefreshing] = useState(true);
 
   const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
 
@@ -35,6 +38,46 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
       router.push("/login?redirect=/dashboard");
     }
   }, [user, authLoading, router, mounted]);
+
+  useEffect(() => {
+    if (!mounted || authLoading || !user) return;
+
+    let cancelled = false;
+
+    Promise.allSettled([getProfile(), getServiceOwnerProfile()])
+      .then(([profileResult, serviceOwnerResult]) => {
+        if (cancelled) return;
+
+        let nextRole: AuthDto["role"] = user.role;
+
+        if (profileResult.status === "fulfilled") {
+          nextRole = profileResult.value.role;
+        }
+
+        if (
+          getDashboardRole({ role: nextRole }) !== "admin" &&
+          serviceOwnerResult.status === "fulfilled"
+        ) {
+          nextRole = "SO";
+        }
+
+        if (String(nextRole) !== String(user.role)) {
+          updateUser({ role: nextRole });
+        }
+      })
+      .catch(() => {
+        // Keep the current session snapshot if the profile refresh fails.
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsRoleRefreshing(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, authLoading, mounted, updateUser]);
 
   if (!mounted || authLoading || !user) {
     return (
@@ -138,7 +181,14 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
         {/* Scrollable Panel Area */}
         <div className="flex-1 overflow-y-auto p-8">
           <div className="max-w-6xl mx-auto w-full">
-            {children}
+            {isRoleRefreshing ? (
+              <div className="flex flex-col items-center justify-center py-20">
+                <Loader2 className="w-8 h-8 animate-spin text-[#E4187D] mb-2" />
+                <p className="text-gray-400 text-sm">Đang kiểm tra vai trò tài khoản...</p>
+              </div>
+            ) : (
+              children
+            )}
           </div>
         </div>
       </main>
