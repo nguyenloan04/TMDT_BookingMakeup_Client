@@ -246,3 +246,16 @@ export async function uploadArtistImage(file: File): Promise<string> {
     const signature = await getUploadSignature(fileName, "artists/avatars");
     return uploadImageToCloudinary(file, signature);
 }
+
+// Nghiệp vụ 3: Up ảnh Service
+export async function uploadServiceImage(file: File): Promise<string> {
+    const validationError = validateImage(file);
+    if (validationError) throw new Error(validationError);
+
+    const extension = file.name.split(".").pop() || "jpg";
+    const fileName = `service-${Date.now()}.${extension}`;
+    
+    // Gọi hàm dùng chung và truyền folder vào
+    const signature = await getUploadSignature(fileName, "services/thumbnails");
+    return uploadImageToCloudinary(file, signature);
+}

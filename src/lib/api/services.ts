@@ -7,6 +7,7 @@ export interface CreateServiceRequest {
   price: number;
   category: string;
   duration: number;
+  imageUrl?: string;
 }
 
 export interface UpdateServiceRequest {
@@ -16,6 +17,7 @@ export interface UpdateServiceRequest {
   category: string;
   duration: number;
   isActive: boolean;
+  imageUrl?: string;
 }
 
 // Lấy toàn bộ dịch vụ active (Public)

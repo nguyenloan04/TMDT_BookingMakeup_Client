@@ -48,5 +48,6 @@ export interface ServiceDto {
   duration: number;
   isActive: boolean;
   rating: number;
+  imageUrl?: string;
 }
 

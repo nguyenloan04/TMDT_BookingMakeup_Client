@@ -26,6 +26,7 @@ import {
   FileText,
   ChevronRight,
   Wallet,
+  UploadCloud,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,7 @@ import {
   getReviewsByArtist,
 } from "@/lib/api";
 import { getMyBookings, updateBookingStatus } from "@/lib/api/booking";
+import { uploadServiceImage } from "@/services/upload-service";
 
 import { ServiceOwnerProfileDto } from "@/types/user";
 import { ServiceDto } from "@/types/service";
@@ -87,6 +89,9 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
   const [serviceDuration, setServiceDuration] = useState(60);
   const [serviceActive, setServiceActive] = useState(true);
   const [savingService, setSavingService] = useState(false);
+  const [serviceImageUrl, setServiceImageUrl] = useState("");
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageError, setImageError] = useState("");
 
   // Bookings State
   const [bookings, setBookings] = useState<BookingDto[]>([]);
@@ -184,6 +189,8 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
     setServiceCat("Bride");
     setServiceDuration(60);
     setServiceActive(true);
+    setServiceImageUrl("");
+    setImageError("");
     setServiceModalOpen(true);
   };
 
@@ -195,6 +202,8 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
     setServiceCat(svc.category);
     setServiceDuration(svc.duration);
     setServiceActive(svc.isActive);
+    setServiceImageUrl(svc.imageUrl || "");
+    setImageError("");
     setServiceModalOpen(true);
   };
 
@@ -218,6 +227,7 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
           category: serviceCat,
           duration: serviceDuration,
           isActive: serviceActive,
+          imageUrl: serviceImageUrl || undefined,
         });
         toast.success("Cập nhật dịch vụ thành công!");
       } else {
@@ -227,6 +237,7 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
           price: servicePrice,
           category: serviceCat,
           duration: serviceDuration,
+          imageUrl: serviceImageUrl || undefined,
         });
         toast.success("Tạo dịch vụ thành công!");
       }
@@ -498,6 +509,16 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
                   className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-4 flex flex-col justify-between hover:shadow-md transition-shadow"
                 >
                   <div className="space-y-2">
+                    {svc.imageUrl && (
+                      <div className="relative w-full h-40 rounded-xl overflow-hidden bg-gray-50 border border-gray-100">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={svc.imageUrl}
+                          alt={svc.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
                     <div className="flex justify-between items-start">
                       <h4 className="font-bold text-gray-900 text-lg leading-tight">
                         {svc.name}
@@ -1274,6 +1295,73 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
                     }
                   />
                 </div>
+              </div>
+
+              {/* Service Image Upload */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">
+                  Hình ảnh dịch vụ (Upload lên Cloud)
+                </label>
+                {imageError && (
+                  <div className="text-xs text-red-500 font-medium mb-1">
+                    {imageError}
+                  </div>
+                )}
+                {serviceImageUrl ? (
+                  <div className="relative w-full h-36 rounded-xl overflow-hidden border border-gray-200 group bg-gray-50 flex items-center justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img 
+                      src={serviceImageUrl} 
+                      alt="Preview" 
+                      className="h-full w-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setServiceImageUrl("")}
+                      className="absolute top-2 right-2 bg-black bg-opacity-60 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-opacity-80 cursor-pointer"
+                      title="Xóa ảnh"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className={`flex flex-col items-center justify-center w-full h-28 border-2 border-dashed rounded-xl cursor-pointer transition relative overflow-hidden ${isUploadingImage ? 'border-gray-200 bg-gray-50' : 'border-gray-300 bg-gray-50 hover:bg-gray-100 hover:border-gray-400'}`}>
+                    <div className="flex flex-col items-center justify-center pt-4 pb-4 text-center">
+                      {isUploadingImage ? (
+                        <>
+                          <Loader2 className="w-6 h-6 text-gray-400 animate-spin mb-1.5" />
+                          <p className="text-xs text-gray-500 font-medium">Đang tải ảnh lên...</p>
+                        </>
+                      ) : (
+                        <>
+                          <UploadCloud className="w-6 h-6 text-gray-400 mb-1" />
+                          <p className="text-xs text-gray-500 font-medium"><span className="text-[#E4187D] font-bold">Bấm để tải ảnh lên</span></p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">PNG, JPG, WEBP tối đa 5MB</p>
+                        </>
+                      )}
+                    </div>
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      accept="image/png, image/jpeg, image/jpg, image/webp" 
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        try {
+                          setIsUploadingImage(true);
+                          setImageError("");
+                          const url = await uploadServiceImage(file);
+                          setServiceImageUrl(url);
+                        } catch (err: any) {
+                          setImageError(err instanceof Error ? err.message : "Không thể upload ảnh, vui lòng thử lại.");
+                        } finally {
+                          setIsUploadingImage(false);
+                        }
+                      }}
+                      disabled={isUploadingImage || savingService}
+                    />
+                  </label>
+                )}
               </div>
 
               <div className="space-y-1.5">
