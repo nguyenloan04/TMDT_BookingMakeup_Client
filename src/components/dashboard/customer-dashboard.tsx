@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { 
   Heart, 
   Search, 
@@ -325,7 +326,7 @@ export default function CustomerDashboard() {
                     <Card key={svc.id} className="overflow-hidden hover:shadow-md transition-shadow flex flex-col justify-between border-gray-100">
                       <div className="relative h-48 bg-gray-100">
                         <Image
-                          src="https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=600"
+                          src={svc.imageUrl || "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=600"}
                           alt={svc.name}
                           fill
                           className="object-cover"
@@ -359,12 +360,11 @@ export default function CustomerDashboard() {
                       </CardContent>
                       <CardFooter className="p-4 pt-0 flex justify-between items-center gap-3">
                         <span className="text-lg font-extrabold text-[#E4187D]">{formatPrice(svc.price)}</span>
-                        <Button 
-                          onClick={() => handleOpenBooking(svc)}
-                          className="bg-[#E4187D] hover:bg-[#c9126b] text-white rounded-full px-6 font-semibold cursor-pointer"
-                        >
-                          Đặt Lịch
-                        </Button>
+                        <Link href={`/services/${svc.id}`}>
+                          <Button className="bg-[#E4187D] hover:bg-[#c9126b] text-white rounded-full px-6 font-semibold cursor-pointer text-xs">
+                            Xem chi tiết
+                          </Button>
+                        </Link>
                       </CardFooter>
                     </Card>
                   ))}
@@ -391,7 +391,7 @@ export default function CustomerDashboard() {
                     <Card key={svc.id} className="overflow-hidden hover:shadow-md transition-shadow flex flex-col justify-between border-gray-100">
                       <div className="relative h-48 bg-gray-100">
                         <Image
-                          src="https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=600"
+                          src={svc.imageUrl || "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=600"}
                           alt={svc.name}
                           fill
                           className="object-cover"
@@ -415,12 +415,11 @@ export default function CustomerDashboard() {
                       </CardHeader>
                       <CardFooter className="p-4 pt-4 flex justify-between items-center gap-3 border-t border-gray-50 mt-4">
                         <span className="text-lg font-extrabold text-[#E4187D]">{formatPrice(svc.price)}</span>
-                        <Button 
-                          onClick={() => handleOpenBooking(svc)}
-                          className="bg-[#E4187D] hover:bg-[#c9126b] text-white rounded-full px-6 font-semibold cursor-pointer"
-                        >
-                          Đặt Lịch
-                        </Button>
+                        <Link href={`/services/${svc.id}`}>
+                          <Button className="bg-[#E4187D] hover:bg-[#c9126b] text-white rounded-full px-6 font-semibold cursor-pointer text-xs">
+                            Xem chi tiết
+                          </Button>
+                        </Link>
                       </CardFooter>
                     </Card>
                   ))}

@@ -34,9 +34,6 @@ import {
   createPromotion,
   updatePromotion,
   deletePromotion,
-  getAllFavouritesAdmin,
-  deleteFavouriteAdmin,
-  FavouriteAdminDto,
   getAllReviews,
   updateReviewStatus,
   deleteReview,
@@ -53,7 +50,6 @@ type AdminTab =
   | "users"
   | "bookings"
   | "promotions"
-  | "favorites"
   | "reviews";
 
 const tabButtonClass = (active: boolean) =>
@@ -77,10 +73,6 @@ export default function AdminDashboard() {
     null,
   );
 
-  const [loadingFavorites, setLoadingFavorites] = useState(false);
-  const [favorites, setFavorites] = useState<FavouriteAdminDto[]>([]);
-  const [favoriteSearchQuery, setFavoriteSearchQuery] = useState("");
-
   const [loadingReviews, setLoadingReviews] = useState(false);
   const [reviews, setReviews] = useState<ReviewDto[]>([]);
   const [reviewSearchQuery, setReviewSearchQuery] = useState("");
@@ -99,7 +91,6 @@ export default function AdminDashboard() {
     fetchUsers();
     fetchBookings();
     fetchPromotionsList();
-    fetchFavorites();
     fetchReviewsList();
   }, []);
 
@@ -151,28 +142,6 @@ export default function AdminDashboard() {
     }
   };
 
-  const fetchFavorites = async () => {
-    setLoadingFavorites(true);
-    try {
-      const list = await getAllFavouritesAdmin();
-      setFavorites(list || []);
-    } catch {
-      toast.error("Không thể tải danh sách dịch vụ yêu thích");
-    } finally {
-      setLoadingFavorites(false);
-    }
-  };
-
-  const handleDeleteFavorite = async (id: number) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa liên kết yêu thích này?")) return;
-    try {
-      await deleteFavouriteAdmin(id);
-      toast.success("Xóa liên kết yêu thích thành công!");
-      fetchFavorites();
-    } catch (e: any) {
-      toast.error(getErrorMessage(e, "Không thể xóa liên kết yêu thích"));
-    }
-  };
 
   const fetchReviewsList = async () => {
     setLoadingReviews(true);
@@ -340,17 +309,6 @@ export default function AdminDashboard() {
       currency: "VND",
     }).format(p);
 
-  const filteredFavorites = useMemo(() => {
-    return favorites.filter(fav => {
-      const query = favoriteSearchQuery.toLowerCase();
-      return (
-        (fav.customerName || "").toLowerCase().includes(query) ||
-        (fav.customerEmail || "").toLowerCase().includes(query) ||
-        (fav.serviceName || "").toLowerCase().includes(query) ||
-        (fav.artistName || "").toLowerCase().includes(query)
-      );
-    });
-  }, [favorites, favoriteSearchQuery]);
 
   const filteredReviews = useMemo(() => {
     return reviews.filter(rev => {
@@ -376,6 +334,12 @@ export default function AdminDashboard() {
         return "Đã Hoàn Thành";
       case "CANCELLED":
         return "Đã Hủy";
+      case "REJECTED":
+        return "Đã Từ Chối";
+      case "PAID":
+        return "Đã Thanh Toán";
+      default:
+        return status;
     }
   };
 
@@ -398,6 +362,8 @@ export default function AdminDashboard() {
       CONFIRMED: 0,
       COMPLETED: 0,
       CANCELLED: 0,
+      REJECTED: 0,
+      PAID: 0,
     };
     const serviceMap = new Map<string, { name: string; count: number }>();
     const customerMap = new Map<string, { name: string; count: number }>();
@@ -476,12 +442,6 @@ export default function AdminDashboard() {
           className={tabButtonClass(activeTab === "promotions")}
         >
           Mã Khuyến Mãi ({promotions.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("favorites")}
-          className={tabButtonClass(activeTab === "favorites")}
-        >
-          Quản Lý Dịch Vụ Ưu Thích
         </button>
         <button
           onClick={() => setActiveTab("reviews")}
@@ -711,115 +671,6 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* TAB: FAVORITE SERVICES MANAGEMENT */}
-      {activeTab === "favorites" && (
-        <div className="space-y-4">
-          {loadingFavorites ? (
-            <div className="flex flex-col items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 animate-spin text-[#E4187D] mb-2" />
-              <p className="text-gray-400 text-sm">
-                Đang tải danh sách dịch vụ yêu thích...
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                  <h3 className="font-bold text-gray-900">
-                    Quản lý dịch vụ yêu thích ({favorites.length})
-                  </h3>
-                  <p className="text-gray-500 text-xs mt-0.5">
-                    Theo dõi và xóa các liên kết dịch vụ yêu thích của người dùng trên hệ thống.
-                  </p>
-                </div>
-                {/* Search Box */}
-                <div className="relative w-full sm:w-72">
-                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </span>
-                  <Input
-                    placeholder="Tìm khách hàng, email, dịch vụ..."
-                    className="pl-9 rounded-full text-xs"
-                    value={favoriteSearchQuery}
-                    onChange={(e) => setFavoriteSearchQuery(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {filteredFavorites.length === 0 ? (
-                <div className="text-center py-20 bg-white rounded-2xl border border-gray-100 p-8 max-w-md mx-auto">
-                  <svg className="w-12 h-12 text-gray-200 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                  </svg>
-                  <h3 className="font-bold text-gray-800 text-lg mb-1">
-                    Không tìm thấy kết quả nào
-                  </h3>
-                  <p className="text-gray-500 text-sm">
-                    {favorites.length === 0 
-                      ? "Chưa có người dùng nào thêm dịch vụ vào danh sách yêu thích." 
-                      : "Không có liên kết yêu thích nào khớp với từ khóa tìm kiếm."}
-                  </p>
-                </div>
-              ) : (
-                <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-                  <table className="w-full text-left text-sm border-collapse">
-                    <thead className="bg-gray-50 text-gray-700 uppercase text-[11px] font-bold tracking-wider">
-                      <tr>
-                        <th className="p-4 border-b border-gray-100">Khách Hàng</th>
-                        <th className="p-4 border-b border-gray-100">Dịch Vụ Yêu Thích</th>
-                        <th className="p-4 border-b border-gray-100">Nghệ Sĩ / Studio</th>
-                        <th className="p-4 border-b border-gray-100 text-right">Hành Động</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 text-gray-700 font-medium">
-                      {filteredFavorites.map((fav) => (
-                        <tr
-                          key={fav.id}
-                          className="hover:bg-gray-50/50 transition-colors"
-                        >
-                          <td className="p-4">
-                            <div className="font-bold text-gray-900">
-                              {fav.customerName}
-                            </div>
-                            <div className="text-[11px] text-gray-400 font-normal mt-0.5">
-                              {fav.customerEmail}
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <div className="font-bold text-[#E4187D]">
-                              {fav.serviceName}
-                            </div>
-                            <div className="text-xs text-gray-500 mt-0.5">
-                              Giá: {formatPrice(fav.servicePrice)}
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <span className="bg-pink-50 text-pink-700 px-2.5 py-1 rounded-full text-xs font-semibold">
-                              {fav.artistName}
-                            </span>
-                          </td>
-                          <td className="p-4 text-right">
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => handleDeleteFavorite(fav.id)}
-                              className="text-xs rounded-full cursor-pointer flex items-center gap-1 ml-auto"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" /> Xóa
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      )}
 
       {/* TAB: REVIEWS MANAGEMENT */}
       {activeTab === "reviews" && (
