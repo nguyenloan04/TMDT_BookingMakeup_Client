@@ -87,6 +87,8 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
   const [serviceDuration, setServiceDuration] = useState(60);
   const [serviceActive, setServiceActive] = useState(true);
   const [savingService, setSavingService] = useState(false);
+  const [serviceImageUrl, setServiceImageUrl] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   // Bookings State
   const [bookings, setBookings] = useState<BookingDto[]>([]);
@@ -184,6 +186,7 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
     setServiceCat("Bride");
     setServiceDuration(60);
     setServiceActive(true);
+    setServiceImageUrl("");
     setServiceModalOpen(true);
   };
 
@@ -195,6 +198,7 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
     setServiceCat(svc.category);
     setServiceDuration(svc.duration);
     setServiceActive(svc.isActive);
+    setServiceImageUrl(svc.imageUrl || "");
     setServiceModalOpen(true);
   };
 
@@ -218,6 +222,7 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
           category: serviceCat,
           duration: serviceDuration,
           isActive: serviceActive,
+          imageUrl: serviceImageUrl || undefined,
         });
         toast.success("Cập nhật dịch vụ thành công!");
       } else {
@@ -227,6 +232,7 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
           price: servicePrice,
           category: serviceCat,
           duration: serviceDuration,
+          imageUrl: serviceImageUrl || undefined,
         });
         toast.success("Tạo dịch vụ thành công!");
       }
@@ -236,6 +242,23 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
       toast.error(e.response?.data || "Thao tác thất bại");
     } finally {
       setSavingService(false);
+    }
+  };
+
+  const handleServiceImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+    try {
+      const { uploadServiceImage } = await import("@/services/upload-service");
+      const url = await uploadServiceImage(file);
+      setServiceImageUrl(url);
+      toast.success("Tải ảnh lên thành công!");
+    } catch (err: any) {
+      toast.error(err.message || "Tải ảnh lên thất bại. Vui lòng thử lại!");
+    } finally {
+      setUploadingImage(false);
     }
   };
 
@@ -498,6 +521,11 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
                   className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-4 flex flex-col justify-between hover:shadow-md transition-shadow"
                 >
                   <div className="space-y-2">
+                    {svc.imageUrl && (
+                      <div className="h-40 w-full rounded-xl overflow-hidden border border-gray-150 mb-3 bg-gray-50 flex items-center justify-center">
+                        <img src={svc.imageUrl} alt={svc.name} className="h-full w-full object-cover" />
+                      </div>
+                    )}
                     <div className="flex justify-between items-start">
                       <h4 className="font-bold text-gray-900 text-lg leading-tight">
                         {svc.name}
@@ -1286,6 +1314,35 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
                   value={serviceDesc}
                   onChange={(e) => setServiceDesc(e.target.value)}
                 />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  Hình ảnh dịch vụ
+                </label>
+                <div className="flex items-center gap-4 p-3 border border-dashed border-gray-200 rounded-2xl bg-gray-50/50">
+                  <div className="h-16 w-16 rounded-xl bg-gray-100 flex items-center justify-center overflow-hidden border border-gray-200 shrink-0">
+                    {uploadingImage ? (
+                      <Loader2 className="h-5 w-5 animate-spin text-pink-500" />
+                    ) : serviceImageUrl ? (
+                      <img src={serviceImageUrl} alt="Preview" className="h-full w-full object-cover" />
+                    ) : (
+                      <Sparkles className="h-5 w-5 text-gray-400" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <Input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleServiceImageUpload} 
+                      className="cursor-pointer text-xs h-9 bg-white file:mr-2 file:py-0 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-pink-50 file:text-pink-700 hover:file:bg-pink-100"
+                      disabled={uploadingImage}
+                    />
+                    <p className="text-[10px] text-gray-450 mt-1">
+                      Hỗ trợ JPG, PNG, WEBP tối đa 5MB.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {editingService && (
