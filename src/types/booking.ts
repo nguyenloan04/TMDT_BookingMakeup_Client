@@ -1,4 +1,5 @@
-export type BookingStatus = "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
+// export type BookingStatus = "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
+export type BookingStatus = "PENDING" | "CONFIRMED" | "REJECTED" | "PAID" | "COMPLETED" | "CANCELLED";
 
 export interface CreateBookingRequest {
   serviceId: string;

@@ -10,19 +10,18 @@ import {
   ChevronLeft,
   ChevronRight,
   Star,
-  MapPin,
   Loader2,
   AlertCircle,
+  CheckCircle2, // Đã thêm icon Check cho thông báo thành công
 } from "lucide-react";
 import { MakeupService } from "@/types/service";
 import { createBooking, getBookingsByArtist } from "@/lib/api/booking";
-import { generatePaymentUrl } from "@/services/payment-service";
 import Image from "next/image";
 import { getServiceDetail } from "@/services/artist-service";
 import { ServiceDetailResponse } from "@/types/artist";
+import { useAuth } from "@/contexts/auth-context";
 
 // Helpers
-
 function pad(n: number) {
   return String(n).padStart(2, "0");
 }
@@ -40,9 +39,9 @@ function generateTimeSlots(): string[] {
   const slots: string[] = [];
   for (let h = 7; h <= 20; h++) {
     slots.push(`${pad(h)}:00:00`);
-    if (h < 20 || true) slots.push(`${pad(h)}:30:00`);
+    slots.push(`${pad(h)}:30:00`);
   }
-  return slots.filter((_, i) => i < 28); // 7:00 → 20:30
+  return slots.filter((_, i) => i < 28);
 }
 
 const TIME_SLOTS = generateTimeSlots();
@@ -55,7 +54,6 @@ const MONTH_NAMES = [
 ];
 
 // Calendar mini
-
 function MiniCalendar({
   selected,
   onSelect,
@@ -69,7 +67,7 @@ function MiniCalendar({
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth() + 1);
 
-  const firstDay = new Date(viewYear, viewMonth - 1, 1).getDay(); // 0=Sun
+  const firstDay = new Date(viewYear, viewMonth - 1, 1).getDay();
   const daysInMonth = new Date(viewYear, viewMonth, 0).getDate();
 
   const prevMonth = () => {
@@ -88,29 +86,18 @@ function MiniCalendar({
 
   return (
     <div>
-      {/* Header tháng */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <button onClick={prevMonth} style={navBtnStyle}>
-          <ChevronLeft size={16} />
-        </button>
+        <button onClick={prevMonth} style={navBtnStyle}><ChevronLeft size={16} /></button>
         <span style={{ fontWeight: 700, fontSize: 14, color: "#111827" }}>
           {MONTH_NAMES[viewMonth - 1]} {viewYear}
         </span>
-        <button onClick={nextMonth} style={navBtnStyle}>
-          <ChevronRight size={16} />
-        </button>
+        <button onClick={nextMonth} style={navBtnStyle}><ChevronRight size={16} /></button>
       </div>
-
-      {/* Ngày trong tuần */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 4 }}>
         {["T2", "T3", "T4", "T5", "T6", "T7", "CN"].map(d => (
-          <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 600, color: "#9ca3af", padding: "4px 0" }}>
-            {d}
-          </div>
+          <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 600, color: "#9ca3af", padding: "4px 0" }}>{d}</div>
         ))}
       </div>
-
-      {/* Ngày */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
         {cells.map((day, i) => {
           if (!day) return <div key={i} />;
@@ -157,7 +144,6 @@ const navBtnStyle: React.CSSProperties = {
 };
 
 // Main Page
-
 export default function BookingPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -165,6 +151,7 @@ export default function BookingPage() {
 
   const serviceId = params.serviceId as string;
   const artistId = searchParams.get("artistId") ?? "";
+  const { user } = useAuth()
 
   const [service, setService] = useState<MakeupService | null>(null);
 
@@ -194,20 +181,19 @@ export default function BookingPage() {
       }
     }).catch(err => console.error("Không lấy được thông tin dịch vụ", err));
   }, [serviceId]);
-  // Booking state
+
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [promoCode, setPromoCode] = useState("");
   const [bookedDates, setBookedDates] = useState<Set<string>>(new Set());
   const [bookedSlots, setBookedSlots] = useState<Set<string>>(new Set());
 
-  // UI state
   const [loading, setLoading] = useState(false);
-  const [paymentRedirecting, setPaymentRedirecting] = useState(false);
   const [loadingSchedule, setLoadingSchedule] = useState(!!artistId);
-  const [error, setError] = useState<string | null>(null);
 
-  // Load lịch bận của artist
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null); // State thông báo thành công
+
   useEffect(() => {
     if (!artistId) return;
     getBookingsByArtist(artistId)
@@ -223,7 +209,7 @@ export default function BookingPage() {
         setBookedDates(dates);
         setBookedSlots(slots);
       })
-      .catch(() => { /* không block UI nếu lỗi */ })
+      .catch(() => { })
       .finally(() => setLoadingSchedule(false));
   }, [artistId]);
 
@@ -232,76 +218,30 @@ export default function BookingPage() {
     return bookedSlots.has(`${selectedDate}_${time}`);
   }, [selectedDate, bookedSlots]);
 
-  // Tính giá
   const basePrice = service?.priceFrom ?? 0;
   const depositAmount = Math.round(basePrice * 0.55);
 
-  // Submit booking & Payment
-  // const handleSubmit = async () => {
-  //   if (!selectedDate || !selectedTime) {
-  //     setError("Vui lòng chọn ngày và giờ.");
-  //     return;
-  //   }
-
-  //   // Kiểm tra đăng nhập
-  //   const raw = typeof window !== "undefined" ? localStorage.getItem("user_data") : null;
-  //   if (!raw) {
-  //     router.push("/login?redirect=" + encodeURIComponent(window.location.pathname + window.location.search));
-  //     return;
-  //   }
-
-  //   setLoading(true);
-  //   setError(null);
-  //   try {
-  //     const booking = await createBooking({
-  //       serviceId,
-  //       ownerId: artistId, //TODO: Fix this to real artist in service or keep using service owner
-  //       bookingDate: selectedDate,
-  //       startTime: selectedTime,
-  //       promoCode: promoCode.trim() || undefined,
-  //     });
-
-  //     setPaymentRedirecting(true);
-  //     const payRes = await generatePaymentUrl(booking.id);
-
-  //     if (payRes.code === "00" && payRes.data) {
-  //       // 3. ĐÁ KHÁCH SANG TRANG VNPAY NGAY VÀ LUÔN!
-  //       window.location.href = payRes.data;
-  //     } else {
-  //       setError(payRes.message || "Lỗi tạo link thanh toán. Vui lòng thử lại.");
-  //       setLoading(false);
-  //       setPaymentRedirecting(false);
-  //     }
-  //   } catch (e: unknown) {
-  //     const msg = (e as { response?: { data?: string } })?.response?.data ?? "Đặt lịch thất bại. Vui lòng thử lại.";
-  //     console.log(e)
-  //     setError(typeof msg === "string" ? msg : "Đặt lịch thất bại.");
-  //     setLoading(false);
-  //     setPaymentRedirecting(false);
-  //   }
-  // };
-
   const handleSubmit = async () => {
     if (!serviceId || !artistId) {
-      setError("Thiếu thông tin Dịch vụ hoặc Chuyên viên. Vui lòng quay lại trang Dịch vụ.");
+      setError("Thiếu thông tin Dịch vụ hoặc Chuyên viên.");
       return;
     }
-
     if (!selectedDate || !selectedTime) {
       setError("Vui lòng chọn ngày và giờ.");
       return;
     }
 
-    const raw = typeof window !== "undefined" ? localStorage.getItem("user_data") : null;
-    if (!raw) {
+
+    if (!user) {
       router.push("/login?redirect=" + encodeURIComponent(window.location.pathname + window.location.search));
       return;
     }
 
     setLoading(true);
     setError(null);
+    setSuccessMsg(null);
     try {
-      const booking = await createBooking({
+      await createBooking({
         serviceId,
         ownerId: artistId,
         bookingDate: selectedDate,
@@ -309,124 +249,53 @@ export default function BookingPage() {
         promoCode: promoCode.trim() || undefined,
       });
 
-      const payRes = await generatePaymentUrl(booking.id);
+      setSuccessMsg("Đặt lịch thành công! Đang chuyển về trang thông tin của bạn...");
 
-      if (payRes.actionUrl && payRes.fields) {
-        const form = document.createElement("form");
-        form.method = "POST";
-        form.action = payRes.actionUrl;
-
-        Object.keys(payRes.fields).forEach((key) => {
-          const input = document.createElement("input");
-          input.type = "hidden";
-          input.name = key;
-          input.value = payRes.fields[key];
-          form.appendChild(input);
-        });
-
-        document.body.appendChild(form);
-        form.submit();
-      } else {
-        setError("Lỗi tạo thông tin thanh toán. Vui lòng thử lại.");
-        setLoading(false);
-        setPaymentRedirecting(false);
-      }
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 2000);
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: string | { message?: string } } })?.response?.data;
       const errorText = typeof msg === "string" ? msg : (msg?.message ?? "Đặt lịch thất bại. Vui lòng thử lại.");
       setError(errorText);
       setLoading(false);
-      setPaymentRedirecting(false);
     }
   };
 
-  // Form screen
   return (
     <div style={{ minHeight: "100vh", background: "#f9fafb", fontFamily: "var(--font-sans, sans-serif)" }}>
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "40px 24px" }}>
-
-        {/* Back */}
-        <button
-          onClick={() => router.back()}
-          style={{
-            display: "flex", alignItems: "center", gap: 6, background: "none",
-            border: "none", color: "#6b7280", cursor: "pointer", fontSize: 14,
-            fontWeight: 500, marginBottom: 24, padding: 0,
-          }}
-        >
+        <button onClick={() => router.back()} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: 14, fontWeight: 500, marginBottom: 24, padding: 0 }}>
           <ChevronLeft size={18} /> Quay lại
         </button>
 
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: "#111827", marginBottom: 28, marginTop: 0 }}>
-          Đặt lịch dịch vụ
-        </h1>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: "#111827", marginBottom: 28, marginTop: 0 }}>Đặt lịch dịch vụ</h1>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 24, alignItems: "flex-start" }}>
-
-          {/* ── Left: form ── */}
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-
-            {/* Service info */}
             {service && (
               <SectionCard title="Thông tin dịch vụ">
                 <div style={{ display: "flex", gap: 16 }}>
-                  <Image
-                    src={service.imageUrl}
-                    alt={service.title}
-                    width={96}
-                    height={96}
-                    unoptimized
-                    style={{ borderRadius: 12, objectFit: "cover", flexShrink: 0 }}
-                  />
+                  <Image src={service.imageUrl} alt={service.title} width={96} height={96} unoptimized style={{ borderRadius: 12, objectFit: "cover", flexShrink: 0 }} />
                   <div style={{ flex: 1 }}>
-                    <h3 style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 700, color: "#111827" }}>
-                      {service.title}
-                    </h3>
+                    <h3 style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 700, color: "#111827" }}>{service.title}</h3>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                      <div style={{
-                        width: 22, height: 22, borderRadius: "50%",
-                        background: service.artistColor, color: "#fff",
-                        fontSize: 10, fontWeight: 700,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                      }}>
+                      <div style={{ width: 22, height: 22, borderRadius: "50%", background: service.artistColor, color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
                         {service.artistInitials}
                       </div>
                       <span style={{ fontSize: 13, color: "#6b7280" }}>{service.artistName}</span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
                       {Array.from({ length: 5 }).map((_, i) => (
-                        <Star key={i} size={12} style={{
-                          color: "#f59e0b",
-                          fill: i < Math.round(service.rating) ? "#f59e0b" : "#e5e7eb",
-                        }} />
+                        <Star key={i} size={12} style={{ color: "#f59e0b", fill: i < Math.round(service.rating) ? "#f59e0b" : "#e5e7eb" }} />
                       ))}
-                      <span style={{ fontSize: 12, color: "#9ca3af", marginLeft: 2 }}>
-                        ({service.reviewCount})
-                      </span>
-                    </div>
-                    <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                      {service.location && (
-                        <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#6b7280" }}>
-                          <MapPin size={12} /> {service.location}
-                        </span>
-                      )}
-                      {service.duration && (
-                        <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#6b7280" }}>
-                          <Clock size={12} /> {service.duration} phút
-                        </span>
-                      )}
+                      <span style={{ fontSize: 12, color: "#9ca3af", marginLeft: 2 }}>({service.reviewCount})</span>
                     </div>
                   </div>
                 </div>
-                {service.description && (
-                  <p style={{ margin: "12px 0 0", fontSize: 13, color: "#6b7280", lineHeight: 1.6 }}>
-                    {service.description}
-                  </p>
-                )}
               </SectionCard>
             )}
 
-            {/* Chọn ngày */}
             <SectionCard title="Chọn ngày" icon={<Calendar size={16} style={{ color: "#ec4899" }} />}>
               {loadingSchedule ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#9ca3af", fontSize: 13 }}>
@@ -435,15 +304,10 @@ export default function BookingPage() {
                   <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
                 </div>
               ) : (
-                <MiniCalendar
-                  selected={selectedDate}
-                  onSelect={(d) => { setSelectedDate(d); setSelectedTime(null); }}
-                  bookedDates={bookedDates}
-                />
+                <MiniCalendar selected={selectedDate} onSelect={(d) => { setSelectedDate(d); setSelectedTime(null); }} bookedDates={bookedDates} />
               )}
             </SectionCard>
 
-            {/* Chọn giờ */}
             <SectionCard title="Chọn giờ bắt đầu" icon={<Clock size={16} style={{ color: "#ec4899" }} />}>
               {!selectedDate ? (
                 <p style={{ color: "#9ca3af", fontSize: 13, margin: 0 }}>Chọn ngày trước để xem khung giờ</p>
@@ -454,9 +318,7 @@ export default function BookingPage() {
                     const active = selectedTime === slot;
                     return (
                       <button
-                        key={slot}
-                        disabled={booked}
-                        onClick={() => !booked && setSelectedTime(slot)}
+                        key={slot} disabled={booked} onClick={() => !booked && setSelectedTime(slot)}
                         style={{
                           padding: "8px 0", borderRadius: 10, fontSize: 13, fontWeight: 500,
                           border: active ? "2px solid #ec4899" : "1.5px solid #e5e7eb",
@@ -474,145 +336,70 @@ export default function BookingPage() {
               )}
             </SectionCard>
 
-            {/* Mã giảm giá */}
             <SectionCard title="Mã giảm giá" icon={<Tag size={16} style={{ color: "#ec4899" }} />}>
-              <div style={{
-                display: "flex", gap: 10,
-                border: "1.5px solid #e5e7eb", borderRadius: 12,
-                overflow: "hidden",
-              }}>
-                <input
-                  type="text"
-                  placeholder="Nhập mã giảm giá (nếu có)"
-                  value={promoCode}
-                  onChange={e => setPromoCode(e.target.value.toUpperCase())}
-                  style={{
-                    flex: 1, border: "none", outline: "none",
-                    padding: "12px 16px", fontSize: 14, color: "#374151",
-                    background: "transparent",
-                  }}
-                />
+              <div style={{ display: "flex", gap: 10, border: "1.5px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
+                <input type="text" placeholder="Nhập mã giảm giá (nếu có)" value={promoCode} onChange={e => setPromoCode(e.target.value.toUpperCase())} style={{ flex: 1, border: "none", outline: "none", padding: "12px 16px", fontSize: 14, color: "#374151", background: "transparent" }} />
               </div>
-              <p style={{ fontSize: 12, color: "#9ca3af", margin: "8px 0 0" }}>
-                Mã giảm giá sẽ được áp dụng tự động khi đặt lịch
-              </p>
             </SectionCard>
-
           </div>
 
-          {/* ── Right: summary + submit ── */}
           <div style={{ position: "sticky", top: 24 }}>
-            <div style={{
-              background: "#fff", borderRadius: 20, padding: 24,
-              boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
-              border: "1px solid #f0f0f0",
-            }}>
-              <h3 style={{ margin: "0 0 20px", fontSize: 16, fontWeight: 800, color: "#111827" }}>
-                Tóm tắt đặt lịch
-              </h3>
-
-              {/* Dịch vụ */}
+            <div style={{ background: "#fff", borderRadius: 20, padding: 24, boxShadow: "0 2px 12px rgba(0,0,0,0.08)", border: "1px solid #f0f0f0" }}>
+              <h3 style={{ margin: "0 0 20px", fontSize: 16, fontWeight: 800, color: "#111827" }}>Tóm tắt đặt lịch</h3>
               {service && (
                 <div style={{ marginBottom: 16 }}>
-                  <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 600, color: "#111827" }}>
-                    {service.title}
-                  </p>
-                  <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>
-                    {service.artistName}
-                    {service.duration ? ` · ${service.duration} phút` : ""}
-                  </p>
+                  <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 600, color: "#111827" }}>{service.title}</p>
+                  <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>{service.artistName}</p>
                 </div>
               )}
 
               <div style={{ borderTop: "1px solid #f0f0f0", paddingTop: 16, marginBottom: 16 }}>
-                {/* Ngày giờ */}
-                <SummaryRow
-                  icon={<Calendar size={14} />}
-                  label="Ngày"
-                  value={selectedDate ? selectedDate.split("-").reverse().join("-") : "Chưa chọn"}
-                  empty={!selectedDate}
-                />
-                <SummaryRow
-                  icon={<Clock size={14} />}
-                  label="Giờ"
-                  value={selectedTime ? selectedTime.slice(0, 5) : "Chưa chọn"}
-                  empty={!selectedTime}
-                />
-                {promoCode && (
-                  <SummaryRow
-                    icon={<Tag size={14} />}
-                    label="Mã KM"
-                    value={promoCode}
-                  />
-                )}
+                <SummaryRow icon={<Calendar size={14} />} label="Ngày" value={selectedDate ? selectedDate.split("-").reverse().join("-") : "Chưa chọn"} empty={!selectedDate} />
+                <SummaryRow icon={<Clock size={14} />} label="Giờ" value={selectedTime ? selectedTime.slice(0, 5) : "Chưa chọn"} empty={!selectedTime} />
+                {promoCode && <SummaryRow icon={<Tag size={14} />} label="Mã KM" value={promoCode} />}
               </div>
 
-              {/* Giá */}
               <div style={{ borderTop: "1px solid #f0f0f0", paddingTop: 16, marginBottom: 20 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <span style={{ fontSize: 13, color: "#6b7280" }}>Giá dịch vụ</span>
-                  <span style={{ fontSize: 13, color: "#111827", fontWeight: 500 }}>{formatVND(basePrice)}</span>
+                  <span style={{ fontSize: 13, color: "#6b7280" }}>Tổng thanh toán</span>
+                  <span style={{ fontSize: 13, color: "#111827", fontWeight: 700 }}>{formatVND(basePrice)}</span>
                 </div>
-                <div style={{
-                  display: "flex", justifyContent: "space-between", marginBottom: 12,
-                  paddingTop: 12, borderTop: "1px dashed #f0f0f0",
-                }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Tổng thanh toán</span>
-                  <span style={{ fontSize: 15, fontWeight: 800, color: "#111827" }}>{formatVND(basePrice)}</span>
-                </div>
-                <div style={{
-                  background: "#fdf2f8", borderRadius: 10, padding: "10px 14px",
-                  display: "flex", justifyContent: "space-between", alignItems: "center",
-                }}>
-                  <span style={{ fontSize: 13, color: "#be185d", fontWeight: 600 }}>Đặt cọc ngay (55%)</span>
+                <div style={{ background: "#fdf2f8", borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 13, color: "#be185d", fontWeight: 600 }}>Cọc trước (55%)</span>
                   <span style={{ fontSize: 15, fontWeight: 800, color: "#ec4899" }}>{formatVND(depositAmount)}</span>
                 </div>
-                <p style={{ fontSize: 11, color: "#9ca3af", margin: "8px 0 0" }}>
-                  Số còn lại ({formatVND(basePrice - depositAmount)}) thanh toán sau khi hoàn thành dịch vụ
-                </p>
               </div>
 
-              {/* Error */}
               {error && (
-                <div style={{
-                  display: "flex", alignItems: "flex-start", gap: 8,
-                  background: "#fef2f2", borderRadius: 10, padding: "10px 14px", marginBottom: 16,
-                }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 8, background: "#fef2f2", borderRadius: 10, padding: "10px 14px", marginBottom: 16 }}>
                   <AlertCircle size={16} style={{ color: "#dc2626", flexShrink: 0, marginTop: 1 }} />
                   <p style={{ margin: 0, fontSize: 13, color: "#dc2626" }}>{error}</p>
                 </div>
               )}
 
-              {/* CTA */}
+              {successMsg && (
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 8, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "10px 14px", marginBottom: 16 }}>
+                  <CheckCircle2 size={16} style={{ color: "#16a34a", flexShrink: 0, marginTop: 1 }} />
+                  <p style={{ margin: 0, fontSize: 13, color: "#16a34a", fontWeight: 500 }}>{successMsg}</p>
+                </div>
+              )}
+
               <button
                 onClick={handleSubmit}
-                disabled={loading || !selectedDate || !selectedTime}
+                disabled={loading || !selectedDate || !selectedTime || successMsg !== null}
                 style={{
-                  width: "100%", padding: "14px 0", borderRadius: 14,
-                  border: "none",
-                  background: loading || !selectedDate || !selectedTime ? "#f3f4f6" : "#ec4899",
-                  color: loading || !selectedDate || !selectedTime ? "#9ca3af" : "#fff",
-                  fontSize: 15, fontWeight: 700,
-                  cursor: loading || !selectedDate || !selectedTime ? "not-allowed" : "pointer",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  transition: "background 0.2s",
+                  width: "100%", padding: "14px 0", borderRadius: 14, border: "none",
+                  background: loading || !selectedDate || !selectedTime || successMsg ? "#f3f4f6" : "#ec4899",
+                  color: loading || !selectedDate || !selectedTime || successMsg ? "#9ca3af" : "#fff",
+                  fontSize: 15, fontWeight: 700, cursor: loading || !selectedDate || !selectedTime || successMsg ? "not-allowed" : "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "background 0.2s",
                 }}
               >
-                {loading ? (
-                  <>
-                    <Loader2 size={18} style={{ animation: "spin 1s linear infinite" }} />
-                    {paymentRedirecting ? "Đang chuyển hướng VNPay..." : "Đang xử lý..."}
-                  </>
-                ) : (
-                  <>
-                    <User size={16} />
-                    Xác nhận đặt lịch & Thanh toán
-                  </>
-                )}
+                {loading ? <Loader2 size={18} style={{ animation: "spin 1s linear infinite" }} /> : <User size={16} />}
+                Xác nhận Đặt Lịch
               </button>
-
               <p style={{ fontSize: 11, color: "#9ca3af", textAlign: "center", marginTop: 12, marginBottom: 0 }}>
-                Bạn sẽ thanh toán đặt cọc trên cổng VNPay
+                Bạn sẽ thanh toán đặt cọc sau khi Chủ tiệm xác nhận lịch hẹn.
               </p>
             </div>
           </div>
@@ -622,15 +409,9 @@ export default function BookingPage() {
   );
 }
 
-// Sub-components
-
 function SectionCard({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div style={{
-      background: "#fff", borderRadius: 20, padding: 24,
-      boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-      border: "1px solid #f0f0f0",
-    }}>
+    <div style={{ background: "#fff", borderRadius: 20, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #f0f0f0" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
         {icon}
         <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#111827" }}>{title}</h2>
@@ -640,11 +421,7 @@ function SectionCard({ title, icon, children }: { title: string; icon?: React.Re
   );
 }
 
-function SummaryRow({
-  icon, label, value, empty,
-}: {
-  icon: React.ReactNode; label: string; value: string; empty?: boolean;
-}) {
+function SummaryRow({ icon, label, value, empty }: { icon: React.ReactNode; label: string; value: string; empty?: boolean; }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
       <span style={{ color: "#9ca3af", flexShrink: 0 }}>{icon}</span>

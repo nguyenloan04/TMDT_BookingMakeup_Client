@@ -4,7 +4,7 @@ import { PageResponse } from "@/types/page-response";
 
 export const chatService = {
     getChatRooms: async (apiUrl: string, userId: string): Promise<ChatRoom[]> => {
-        const response = await axios.get<ChatRoom[]>(`${apiUrl}/api/chat/rooms/${userId}`);
+        const response = await axios.get<ChatRoom[]>(`${apiUrl}/chat/rooms/${userId}`);
         return response.data;
     },
 
