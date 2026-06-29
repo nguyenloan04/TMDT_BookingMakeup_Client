@@ -807,21 +807,21 @@ export default function SoDashboard({ userId }: SoDashboardProps) {
                     </div>
 
                     <div className="flex flex-wrap gap-4 text-xs pt-1.5 border-t border-gray-50/50">
-                      <p className="text-gray-400 font-mono">
+                      <p className="text-gray-400">
                         Tổng cộng:{" "}
-                        <span className="font-extrabold text-gray-700">
+                        <span className="font-medium text-gray-700">
                           {formatPrice(booking.totalAmount)}
                         </span>
                       </p>
-                      <p className="text-gray-400 font-mono">
+                      <p className="text-gray-400">
                         Khách cọc (55%):{" "}
-                        <span className="font-extrabold text-pink-600">
+                        <span className="font-medium text-pink-600">
                           {formatPrice(booking.depositAmount)}
                         </span>
                       </p>
-                      <p className="text-gray-400 font-mono">
+                      <p className="text-gray-400">
                         Còn lại (45%):{" "}
-                        <span className="font-bold text-gray-500">
+                        <span className="font-medium text-gray-500">
                           {formatPrice(booking.totalAmount - booking.depositAmount)}
                         </span>
                       </p>
