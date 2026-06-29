@@ -1,12 +1,13 @@
 "use client";
 
 import { useAuth } from "@/contexts/auth-context";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, Suspense, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { getDashboardRole, getDashboardRoleLabel } from "@/lib/dashboard-role";
 import {
   Palette,
   Home,
@@ -26,7 +27,6 @@ const emptySubscribe = () => () => { };
 function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const { user, logout, isLoading: authLoading } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
 
@@ -45,12 +45,8 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const dbRole = String(user?.role) === "ADMIN" || user?.role === 1 ? "admin" : "customer";
-  const currentRole = searchParams.get("role") || dbRole;
-
-  const handleRoleChange = (role: string) => {
-    router.push(`/dashboard?role=${role}`);
-  };
+  const currentRole = getDashboardRole(user);
+  const roleLabel = getDashboardRoleLabel(currentRole);
 
   return (
     <div className="flex h-screen bg-[#FDFBFD] overflow-hidden font-sans">
@@ -102,20 +98,14 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          {/* Quick Role Toggle */}
+          {/* Current Role */}
           <div className="space-y-1.5 p-3 rounded-2xl bg-pink-50/30 border border-pink-100/30">
             <label className="text-[10px] font-extrabold text-pink-700 uppercase tracking-widest flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-[#E4187D]" /> Giả lập vai trò (Test)
+              <ShieldCheck className="w-3.5 h-3.5 text-[#E4187D]" /> Vai trò hiện tại
             </label>
-            <select
-              value={currentRole}
-              onChange={(e) => handleRoleChange(e.target.value)}
-              className="w-full border border-pink-200/50 rounded-lg p-2 bg-white text-xs font-bold text-gray-700 focus:outline-none focus:ring-1 focus:ring-pink-300 cursor-pointer"
-            >
-              <option value="customer">Khách Hàng (Customer)</option>
-              <option value="so">Chủ Studio (Service Owner)</option>
-              <option value="admin">Quản Trị Viên (Admin)</option>
-            </select>
+            <div className="w-full border border-pink-200/50 rounded-lg p-2 bg-white text-xs font-bold text-gray-700">
+              {roleLabel}
+            </div>
           </div>
 
           {/* Logout */}
@@ -137,7 +127,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-black text-gray-900">Bảng Điều Khiển</h2>
             <Badge className="bg-[#E4187D] text-white hover:bg-[#E4187D] capitalize text-[10px] font-bold tracking-wider">
-              {currentRole === "so" ? "Service Owner" : currentRole}
+              {roleLabel}
             </Badge>
           </div>
           <div className="text-xs text-gray-400">

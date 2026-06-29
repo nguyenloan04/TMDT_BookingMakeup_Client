@@ -247,7 +247,19 @@ export async function uploadArtistImage(file: File): Promise<string> {
     return uploadImageToCloudinary(file, signature);
 }
 
-// Nghiệp vụ 3: Up ảnh Service
+// Nghiệp vụ 3: Up ảnh đại diện người dùng
+export async function uploadAvatarImage(file: File): Promise<string> {
+    const validationError = validateImage(file);
+    if (validationError) throw new Error(validationError);
+
+    const extension = file.name.split(".").pop() || "jpg";
+    const fileName = `avatar-${Date.now()}.${extension}`;
+
+    const signature = await getUploadSignature(fileName, "users/avatars");
+    return uploadImageToCloudinary(file, signature);
+}
+
+// Nghiệp vụ 4: Up ảnh Service
 export async function uploadServiceImage(file: File): Promise<string> {
     const validationError = validateImage(file);
     if (validationError) throw new Error(validationError);

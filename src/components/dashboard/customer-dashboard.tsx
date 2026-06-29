@@ -8,13 +8,16 @@ import {
   Search, 
   Calendar, 
   Clock, 
-  Tag, 
   Star, 
   MapPin, 
+  User,
+  Mail,
+  Phone,
+  Save,
+  UploadCloud,
   AlertCircle, 
   CheckCircle2, 
   Loader2, 
-  PlusCircle, 
   MessageSquare 
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,27 +31,41 @@ import {
   getFavourites, 
   addFavourite, 
   removeFavourite, 
-  isFavourite 
+  getProfile,
+  updateProfile,
 } from "@/lib/api";
 import { createBooking, getMyBookings } from "@/lib/api/booking";
 import { validatePromotion } from "@/lib/api/promotions";
 import { createReview, getReviewsByService } from "@/lib/api/reviews";
+import { uploadAvatarImage } from "@/services/upload-service";
 
 import { ServiceDto } from "@/types/service";
 import { BookingDto } from "@/types/booking";
 import { CommentTag, ReviewDto } from "@/types/review";
+import { UserDto } from "@/types/user";
 import { defaultAvatar } from "@/common/constant/default-avatar";
 
 export default function CustomerDashboard() {
-  const [activeTab, setActiveTab] = useState<"explorer" | "favourites" | "bookings">("explorer");
+  const [activeTab, setActiveTab] = useState<"explorer" | "favourites" | "bookings" | "profile">("explorer");
   const [services, setServices] = useState<ServiceDto[]>([]);
   const [favourites, setFavourites] = useState<ServiceDto[]>([]);
   const [bookings, setBookings] = useState<BookingDto[]>([]);
+  const [profile, setProfile] = useState<UserDto | null>(null);
   
   const [favStatusMap, setFavStatusMap] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+
+  // Profile State
+  const [profileDisplayName, setProfileDisplayName] = useState("");
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState("");
+  const [profilePhone, setProfilePhone] = useState("");
+  const [profileGender, setProfileGender] = useState("");
+  const [profileAddress, setProfileAddress] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
 
   // Booking Modal State
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
@@ -83,6 +100,14 @@ export default function CustomerDashboard() {
   const fetchInitialData = async () => {
     setLoading(true);
     try {
+      const currentProfile = await getProfile();
+      setProfile(currentProfile);
+      setProfileDisplayName(currentProfile.displayName || "");
+      setProfileAvatarUrl(currentProfile.avatarUrl || "");
+      setProfilePhone(currentProfile.phone || "");
+      setProfileGender(currentProfile.gender?.toString() || "");
+      setProfileAddress(currentProfile.address || "");
+
       const allSvcs = await getAllServices();
       setServices(allSvcs);
 
@@ -102,6 +127,64 @@ export default function CustomerDashboard() {
       toast.error("Không thể tải dữ liệu. Vui lòng kiểm tra kết nối.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const getErrorMessage = (error: unknown, fallback: string): string => {
+    if (typeof error === "object" && error !== null && "response" in error) {
+      const response = (error as { response?: { data?: unknown } }).response;
+      if (typeof response?.data === "string") {
+        return response.data;
+      }
+      if (typeof response?.data === "object" && response.data !== null) {
+        const data = response.data as { message?: unknown; error?: unknown };
+        if (typeof data.message === "string") return data.message;
+        if (typeof data.error === "string") return data.error;
+      }
+    }
+    if (error instanceof Error) {
+      return error.message;
+    }
+    return fallback;
+  };
+
+  const handleSaveProfile = async () => {
+    setSavingProfile(true);
+    try {
+      const updated = await updateProfile({
+        displayName: profileDisplayName.trim() || undefined,
+        avatarUrl: profileAvatarUrl.trim() || undefined,
+        phone: profilePhone.trim() || undefined,
+        gender: profileGender || undefined,
+        address: profileAddress.trim() || undefined,
+      });
+      setProfile(updated);
+      setProfileDisplayName(updated.displayName || "");
+      setProfileAvatarUrl(updated.avatarUrl || "");
+      setProfilePhone(updated.phone || "");
+      setProfileGender(updated.gender?.toString() || "");
+      setProfileAddress(updated.address || "");
+      toast.success("Cập nhật hồ sơ cá nhân thành công!");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Không thể cập nhật hồ sơ cá nhân"));
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleUploadAvatar = async (file: File) => {
+    setUploadingAvatar(true);
+    setAvatarError("");
+    try {
+      const url = await uploadAvatarImage(file);
+      setProfileAvatarUrl(url);
+      toast.success("Tải ảnh đại diện thành công!");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Không thể tải ảnh đại diện";
+      setAvatarError(message);
+      toast.error(message);
+    } finally {
+      setUploadingAvatar(false);
     }
   };
 
@@ -185,8 +268,8 @@ export default function CustomerDashboard() {
       // Reload bookings
       const bookingList = await getMyBookings();
       setBookings(bookingList);
-    } catch (e: any) {
-      toast.error(e.response?.data || "Đặt lịch thất bại");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Đặt lịch thất bại"));
     } finally {
       setSubmittingBooking(false);
     }
@@ -217,8 +300,8 @@ export default function CustomerDashboard() {
       // Reload bookings to update reviewed status
       const bookingList = await getMyBookings();
       setBookings(bookingList);
-    } catch (e: any) {
-      toast.error(e.response?.data || "Không thể gửi đánh giá");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Không thể gửi đánh giá"));
     } finally {
       setSubmittingReview(false);
     }
@@ -270,6 +353,16 @@ export default function CustomerDashboard() {
           }`}
         >
           Lịch Hẹn Của Tôi ({bookings.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("profile")}
+          className={`pb-2 px-1 font-semibold transition-all border-b-2 text-sm cursor-pointer ${
+            activeTab === "profile" 
+              ? "border-[#E4187D] text-[#E4187D]" 
+              : "border-transparent text-gray-500 hover:text-gray-900"
+          }`}
+        >
+          Hồ Sơ cá nhân
         </button>
       </div>
 
@@ -494,6 +587,218 @@ export default function CustomerDashboard() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* TAB 4: PERSONAL PROFILE */}
+          {activeTab === "profile" && (
+            <div className="space-y-6">
+              <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+                <div className="flex flex-col lg:flex-row gap-8">
+                  <div className="lg:w-72 shrink-0 space-y-4">
+                    <div className="flex flex-col items-center text-center bg-gray-50/70 border border-gray-100 rounded-2xl p-5">
+                      <div className="relative w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-sm bg-white">
+                        <Image
+                          src={profileAvatarUrl || profile?.avatarUrl || defaultAvatar}
+                          alt={profile?.displayName || profile?.username || "Customer"}
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
+                      </div>
+                      <h3 className="mt-3 font-extrabold text-gray-900 text-lg">
+                        {profileDisplayName || profile?.username || "Khách hàng"}
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {profile?.email || "Chưa có email"}
+                      </p>
+                      <div className="mt-4 w-full grid grid-cols-2 gap-2 text-xs">
+                        <div className="bg-white rounded-xl border border-gray-100 p-3">
+                          <span className="block text-gray-400 font-semibold uppercase">
+                            Điểm
+                          </span>
+                          <span className="block text-[#E4187D] font-extrabold text-base">
+                            {profile?.totalPoints ?? 0}
+                          </span>
+                        </div>
+                        <div className="bg-white rounded-xl border border-gray-100 p-3">
+                          <span className="block text-gray-400 font-semibold uppercase">
+                            Lịch hẹn
+                          </span>
+                          <span className="block text-gray-900 font-extrabold text-base">
+                            {bookings.length}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-pink-50/50 border border-pink-100/60 rounded-2xl p-4 text-sm text-gray-600 space-y-2">
+                      <p className="font-bold text-gray-900 flex items-center gap-2">
+                        <User className="w-4 h-4 text-[#E4187D]" />
+                        Thông tin tài khoản
+                      </p>
+                      <p className="flex items-center gap-2 text-xs">
+                        <Mail className="w-3.5 h-3.5 text-gray-400" />
+                        {profile?.email || "Chưa cập nhật email"}
+                      </p>
+                      <p className="flex items-center gap-2 text-xs">
+                        <Phone className="w-3.5 h-3.5 text-gray-400" />
+                        {profilePhone || "Chưa cập nhật số điện thoại"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 space-y-5">
+                    <div>
+                      <h3 className="font-bold text-gray-900 text-lg">
+                        Hồ Sơ cá nhân
+                      </h3>
+                      <p className="text-gray-500 text-xs mt-0.5">
+                        Cập nhật thông tin liên hệ để studio phục vụ và xác nhận
+                        lịch hẹn thuận tiện hơn.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                          Tên hiển thị
+                        </label>
+                        <Input
+                          placeholder="Tên bạn muốn hiển thị"
+                          value={profileDisplayName}
+                          onChange={(e) => setProfileDisplayName(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                          Tên đăng nhập
+                        </label>
+                        <Input value={profile?.username || ""} disabled />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                          Email
+                        </label>
+                        <Input value={profile?.email || ""} disabled />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                          Số điện thoại
+                        </label>
+                        <Input
+                          placeholder="Nhập số điện thoại"
+                          value={profilePhone}
+                          onChange={(e) => setProfilePhone(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                          Giới tính
+                        </label>
+                        <select
+                          className="w-full border border-gray-200 rounded-lg p-2.5 bg-white text-sm focus:outline-none focus:border-pink-300 focus:ring-1 focus:ring-pink-100"
+                          value={profileGender}
+                          onChange={(e) => setProfileGender(e.target.value)}
+                        >
+                          <option value="">Chưa cập nhật</option>
+                          <option value="FEMALE">Nữ</option>
+                          <option value="MALE">Nam</option>
+                          <option value="OTHER">Khác</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">
+                          Ảnh đại diện
+                        </label>
+                        {avatarError && (
+                          <p className="text-xs text-red-500 font-medium">
+                            {avatarError}
+                          </p>
+                        )}
+                        <label
+                          className={`flex items-center justify-between gap-3 w-full border-2 border-dashed rounded-xl px-4 py-3 cursor-pointer transition ${
+                            uploadingAvatar
+                              ? "border-gray-200 bg-gray-50"
+                              : "border-gray-300 bg-gray-50 hover:bg-gray-100 hover:border-gray-400"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            {uploadingAvatar ? (
+                              <Loader2 className="w-5 h-5 text-gray-400 animate-spin shrink-0" />
+                            ) : (
+                              <UploadCloud className="w-5 h-5 text-gray-400 shrink-0" />
+                            )}
+                            <div className="min-w-0 text-left">
+                              <p className="text-xs font-bold text-[#E4187D] truncate">
+                                {uploadingAvatar ? "Đang tải ảnh lên..." : "Chọn ảnh từ máy"}
+                              </p>
+                              <p className="text-[10px] text-gray-400">
+                                PNG, JPG, WEBP tối đa 5MB
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-xs font-semibold text-gray-400 shrink-0">
+                            Browse
+                          </span>
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept="image/png, image/jpeg, image/jpg, image/webp"
+                            disabled={uploadingAvatar || savingProfile}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              e.target.value = "";
+                              if (file) {
+                                handleUploadAvatar(file);
+                              }
+                            }}
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <MapPin className="w-4 h-4 text-gray-400" />
+                        Địa chỉ
+                      </label>
+                      <textarea
+                        className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:border-pink-300 focus:ring-1 focus:ring-pink-100 min-h-[90px]"
+                        placeholder="Nhập địa chỉ để studio dễ liên hệ khi cần..."
+                        value={profileAddress}
+                        onChange={(e) => setProfileAddress(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="flex justify-end pt-4 border-t border-gray-100">
+                      <Button
+                        onClick={handleSaveProfile}
+                        disabled={savingProfile}
+                        className="bg-[#E4187D] hover:bg-[#c9126b] text-white rounded-full px-8 font-semibold cursor-pointer"
+                      >
+                        {savingProfile ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
+                            Đang lưu...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-4 h-4 mr-1.5" />
+                            Lưu Hồ Sơ
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </>

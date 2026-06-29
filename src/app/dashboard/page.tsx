@@ -1,15 +1,14 @@
 "use client";
 
 import { useAuth } from "@/contexts/auth-context";
-import { useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import CustomerDashboard from "@/components/dashboard/customer-dashboard";
 import SoDashboard from "@/components/dashboard/so-dashboard";
 import AdminDashboard from "@/components/dashboard/admin-dashboard";
+import { getDashboardRole } from "@/lib/dashboard-role";
 
 export default function DashboardPage() {
   const { user, isLoading } = useAuth();
-  const searchParams = useSearchParams();
 
   if (isLoading || !user) {
     return (
@@ -20,10 +19,7 @@ export default function DashboardPage() {
     );
   }
 
-  // Get current active role from search parameters or fallback to DB role
-  // user.role is USER (0) or ADMIN (1)
-  const dbRole = String(user.role) === "ADMIN" || user.role === 1 ? "admin" : "customer";
-  const activeRole = searchParams.get("role") || dbRole;
+  const activeRole = getDashboardRole(user);
 
   switch (activeRole) {
     case "so":
